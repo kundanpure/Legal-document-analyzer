@@ -115,14 +115,14 @@ export const UploadModal = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden">
         <DialogHeader>
-          <DialogTitle className="heading-serif text-2xl">
+          <DialogTitle className="heading-sans text-2xl font-light">
             Upload Legal Documents
           </DialogTitle>
-          <div className="flex items-center gap-4 mt-2">
+          <div className="flex items-center gap-4 mt-3">
             <Badge variant="secondary">
               {currentFileCount + selectedFiles.length} / {MAX_FILES} PDFs
             </Badge>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground font-light">
               Max 10MB per file
             </p>
           </div>
@@ -130,11 +130,11 @@ export const UploadModal = ({
 
         <div className="space-y-6">
           {/* Supported Documents Info */}
-          <Card className="p-4 bg-primary/5 border-primary/20">
-            <h4 className="font-semibold text-sm mb-2">Supported Documents</h4>
+          <Card className="p-6 bg-gradient-primary/3 border-0 shadow-soft">
+            <h4 className="font-medium text-sm mb-3 text-foreground">Supported Documents</h4>
             <div className="flex flex-wrap gap-2">
               {["Contracts", "Loan Agreements", "Rental Agreements", "Terms & Conditions", "NDAs", "Employment Agreements"].map((type) => (
-                <Badge key={type} variant="outline" className="text-xs">
+                <Badge key={type} variant="outline" className="text-xs font-light border-border/50">
                   {type}
                 </Badge>
               ))}
@@ -143,10 +143,10 @@ export const UploadModal = ({
 
           {/* Upload Area */}
           <Card
-            className={`border-2 border-dashed p-8 text-center cursor-pointer transition-smooth ${
+            className={`border-2 border-dashed p-12 text-center cursor-pointer transition-smooth rounded-2xl ${
               dragActive 
-                ? 'border-primary bg-primary/5' 
-                : 'border-border hover:border-primary/50 hover:bg-primary/5'
+                ? 'border-primary bg-gradient-primary/5 shadow-soft' 
+                : 'border-border/50 hover:border-primary/30 hover:bg-gradient-primary/2 hover:shadow-soft'
             }`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -154,16 +154,16 @@ export const UploadModal = ({
             onDrop={handleDrop}
             onClick={() => document.getElementById('file-input')?.click()}
           >
-            <Upload className={`h-12 w-12 mx-auto mb-4 ${
+            <Upload className={`h-16 w-16 mx-auto mb-6 ${
               dragActive ? 'text-primary' : 'text-muted-foreground'
             }`} />
-            <h3 className="font-semibold mb-2">
+            <h3 className="font-medium mb-3 text-lg">
               {dragActive ? 'Drop files here' : 'Upload PDF Documents'}
             </h3>
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="text-muted-foreground mb-6 font-light leading-relaxed">
               Drag and drop your files here, or click to browse
             </p>
-            <Button variant="outline">
+            <Button variant="outline" className="px-8 py-3 rounded-xl font-medium">
               Choose Files
             </Button>
             <input
@@ -179,14 +179,14 @@ export const UploadModal = ({
           {/* Selected Files */}
           {selectedFiles.length > 0 && (
             <div className="max-h-40 overflow-y-auto">
-              <h4 className="font-semibold text-sm mb-3">Selected Files ({selectedFiles.length})</h4>
-              <div className="space-y-2">
+              <h4 className="font-medium text-sm mb-4">Selected Files ({selectedFiles.length})</h4>
+              <div className="space-y-3">
                 {selectedFiles.map((file, index) => (
-                  <div key={index} className="flex items-center gap-3 p-3 bg-card rounded-lg border">
-                    <FileText className="h-4 w-4 text-primary" />
+                  <div key={index} className="flex items-center gap-4 p-4 bg-card rounded-xl border-0 shadow-soft">
+                    <FileText className="h-5 w-5 text-primary" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{file.name}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground font-light">
                         {formatFileSize(file.size)}
                       </p>
                     </div>
@@ -194,7 +194,7 @@ export const UploadModal = ({
                       size="sm"
                       variant="ghost"
                       onClick={() => removeFile(index)}
-                      className="h-8 w-8 p-0"
+                      className="h-8 w-8 p-0 rounded-lg hover:bg-muted"
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -217,14 +217,14 @@ export const UploadModal = ({
           )}
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button variant="outline" onClick={onClose} disabled={uploading}>
+          <div className="flex justify-end gap-4 pt-6 border-t border-border/50">
+            <Button variant="outline" onClick={onClose} disabled={uploading} className="px-8 py-3 rounded-xl font-medium">
               Cancel
             </Button>
             <Button 
               onClick={handleUpload} 
               disabled={selectedFiles.length === 0 || uploading}
-              className="bg-gradient-primary hover:shadow-glow-primary"
+              className="bg-gradient-primary hover:shadow-glow-primary px-8 py-3 rounded-xl font-medium"
             >
               {uploading ? (
                 <>

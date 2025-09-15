@@ -2,66 +2,67 @@
 @tailwind components;
 @tailwind utilities;
 
-/* LegalAI Design System - Dark theme with sophisticated serif typography */
+/* LegalAI Design System - Light theme with clean Google Sans typography */
 @layer base {
   :root {
-    /* Core Dark Theme */
-    --background: 220 13% 7%;        /* #121212 deep charcoal */
-    --foreground: 210 20% 95%;       /* Near white for primary text */
+    /* Core Light Theme */
+    --background: 0 0% 100%;         /* Pure white */
+    --foreground: 222 15% 15%;       /* Dark gray for text */
 
-    --card: 220 13% 9%;              /* Slightly lighter than background */
-    --card-foreground: 210 20% 95%; 
+    --card: 0 0% 100%;               /* White cards */
+    --card-foreground: 222 15% 15%; 
 
-    --popover: 220 13% 8%;
-    --popover-foreground: 210 20% 95%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 15% 15%;
 
     /* Gradient Accent System */
     --primary: 250 84% 54%;          /* Vibrant purple */
-    --primary-foreground: 210 20% 98%;
+    --primary-foreground: 0 0% 100%;
     --primary-glow: 250 90% 70%;     /* Lighter purple for glows */
     
-    --secondary: 220 13% 15%;        /* Dark gray cards */
-    --secondary-foreground: 210 20% 85%;
+    --secondary: 210 10% 96%;        /* Very light gray */
+    --secondary-foreground: 222 15% 15%;
     
     --accent: 210 100% 56%;          /* Electric blue */
-    --accent-foreground: 210 20% 98%;
+    --accent-foreground: 0 0% 100%;
     --accent-glow: 210 100% 70%;     /* Blue glow */
 
     /* Interactive States */
-    --muted: 220 13% 12%;
-    --muted-foreground: 210 15% 65%;
+    --muted: 210 10% 95%;
+    --muted-foreground: 222 15% 50%;
     
-    --border: 220 13% 18%;           /* Subtle borders */
-    --input: 220 13% 15%;
+    --border: 210 10% 90%;           /* Light borders */
+    --input: 210 10% 96%;
     --ring: 250 84% 54%;
 
     /* Status Colors */
     --destructive: 0 84% 60%;
-    --destructive-foreground: 210 20% 98%;
+    --destructive-foreground: 0 0% 100%;
 
-    --radius: 12px;                  /* Larger radius for modern feel */
+    --radius: 16px;                  /* Larger radius for modern feel */
 
     /* Custom Design Tokens */
     --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
-    --gradient-hero: linear-gradient(135deg, hsl(var(--primary) / 0.1), hsl(var(--accent) / 0.05));
-    --glow-primary: 0 0 30px hsl(var(--primary-glow) / 0.3);
-    --glow-accent: 0 0 25px hsl(var(--accent-glow) / 0.2);
-    --shadow-elegant: 0 20px 40px -20px hsl(var(--primary) / 0.1);
+    --gradient-hero: linear-gradient(135deg, hsl(var(--primary) / 0.05), hsl(var(--accent) / 0.02));
+    --glow-primary: 0 0 40px hsl(var(--primary-glow) / 0.15);
+    --glow-accent: 0 0 30px hsl(var(--accent-glow) / 0.1);
+    --shadow-elegant: 0 4px 20px -4px hsl(var(--primary) / 0.1);
+    --shadow-soft: 0 2px 8px -2px hsl(222 15% 15% / 0.08);
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
     /* Typography Scale */
-    --font-serif: 'Playfair Display', serif;
-    --font-body: 'Merriweather', serif;
-    --letter-spacing-wide: 0.025em;
+    --font-sans: 'Google Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --letter-spacing-tight: -0.025em;
+    --letter-spacing-normal: 0em;
   }
 
   .dark {
-    /* Dark mode is default, keep same values */
-    --background: 220 13% 7%;
+    /* Optional dark mode override */
+    --background: 222 15% 7%;
     --foreground: 210 20% 95%;
-    --card: 220 13% 9%;
+    --card: 222 15% 9%;
     --card-foreground: 210 20% 95%;
-    --popover: 220 13% 8%;
+    --popover: 222 15% 8%;
     --popover-foreground: 210 20% 95%;
     --primary: 250 84% 54%;
     --primary-foreground: 210 20% 98%;
@@ -83,8 +84,9 @@
   }
 
   body {
-    @apply bg-background text-foreground font-body;
+    @apply bg-background text-foreground font-sans;
     font-feature-settings: "kern" 1, "liga" 1;
+    font-family: var(--font-sans);
   }
 
   /* Smooth scrolling */
@@ -93,15 +95,32 @@
   }
 
   /* Typography Classes */
-  .heading-serif {
-    font-family: var(--font-serif);
+  .heading-sans {
+    font-family: var(--font-sans);
     font-weight: 600;
-    letter-spacing: var(--letter-spacing-wide);
+    letter-spacing: var(--letter-spacing-tight);
   }
 
-  .body-serif {
-    font-family: var(--font-body);
+  .body-sans {
+    font-family: var(--font-sans);
     font-weight: 400;
+    letter-spacing: var(--letter-spacing-normal);
+  }
+
+  /* Scroll-triggered animations */
+  .scroll-reveal {
+    opacity: 0;
+    transform: translateY(40px);
+    transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .scroll-reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .parallax-bg {
+    will-change: transform;
   }
 }
 

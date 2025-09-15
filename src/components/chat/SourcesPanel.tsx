@@ -45,7 +45,7 @@ export const SourcesPanel = ({
       {/* Header */}
       <div className="p-6 border-b border-border">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="heading-serif text-xl">Sources</h2>
+          <h2 className="heading-sans text-xl font-medium">Sources</h2>
           <Badge variant="secondary" className="text-xs">
             {uploadedFiles.length} / 50 PDFs
           </Badge>

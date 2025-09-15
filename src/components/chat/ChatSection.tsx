@@ -87,7 +87,7 @@ export const ChatSection = ({ activeDocument, hasDocuments }: ChatSectionProps) 
       <div className="p-6 border-b border-border bg-card/50">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="heading-serif text-2xl">
+            <h1 className="heading-sans text-2xl font-light">
               {activeDocument || "Document Analysis"}
             </h1>
             {hasDocuments && (
@@ -116,7 +116,7 @@ export const ChatSection = ({ activeDocument, hasDocuments }: ChatSectionProps) 
         {!hasDocuments ? (
           <div className="text-center py-12">
             <Bot className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="heading-serif text-xl mb-2">Upload Documents to Start</h3>
+            <h3 className="heading-sans text-xl mb-2 font-medium">Upload Documents to Start</h3>
             <p className="text-muted-foreground">
               Upload your legal documents to begin AI-powered analysis and get instant insights.
             </p>
@@ -125,7 +125,7 @@ export const ChatSection = ({ activeDocument, hasDocuments }: ChatSectionProps) 
           <div className="space-y-6">
             <div className="text-center py-8">
               <Bot className="h-12 w-12 mx-auto mb-4 text-primary" />
-              <h3 className="heading-serif text-xl mb-2">Ready to Analyze</h3>
+              <h3 className="heading-sans text-xl mb-2 font-medium">Ready to Analyze</h3>
               <p className="text-muted-foreground">
                 Ask me anything about your uploaded documents. I can explain complex terms, identify risks, and provide summaries.
               </p>

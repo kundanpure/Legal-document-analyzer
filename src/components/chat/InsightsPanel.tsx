@@ -44,7 +44,7 @@ export const InsightsPanel = ({ activeDocument, hasDocuments }: InsightsPanelPro
     return (
       <div className="w-80 bg-card border-l border-border flex flex-col h-full">
         <div className="p-6 border-b border-border">
-          <h2 className="heading-serif text-xl">Insights</h2>
+          <h2 className="heading-sans text-xl font-medium">Insights</h2>
         </div>
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="text-center text-muted-foreground">
@@ -60,7 +60,7 @@ export const InsightsPanel = ({ activeDocument, hasDocuments }: InsightsPanelPro
     <div className="w-80 bg-card border-l border-border flex flex-col h-full">
       {/* Header */}
       <div className="p-6 border-b border-border">
-        <h2 className="heading-serif text-xl">Insights</h2>
+        <h2 className="heading-sans text-xl font-medium">Insights</h2>
         {activeDocument && (
           <p className="text-xs text-muted-foreground mt-1 truncate">
             {activeDocument}

@@ -51,9 +51,7 @@ export default {
         },
       },
       fontFamily: {
-        serif: ["'Playfair Display'", "serif"],
-        body: ["'Merriweather'", "serif"],
-        sans: ["Inter", "sans-serif"], // fallback for any sans needs
+        sans: ["'Google Sans'", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
       },
       letterSpacing: {
         wide: "0.025em",
