@@ -1,14 +1,16 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Send, Mic, Download, Bot, User } from "lucide-react";
+import { Send, Mic, Bot as BotIcon, User } from "lucide-react";
+
+const Spline = lazy(() => import("@splinetool/react-spline"));
 
 interface Message {
   id: string;
   text: string;
-  sender: 'user' | 'ai';
+  sender: "user" | "ai";
   timestamp: Date;
 }
 
@@ -18,231 +20,144 @@ interface ChatSectionProps {
 }
 
 const suggestedQuestions = [
-  "What are the key risks in this contract?",
-  "Summarize this document in simple terms",
-  "Are there any hidden fees or clauses?",
-  "What are my obligations under this agreement?",
-  "What happens if I terminate this contract?",
-  "Are there any unusual or concerning terms?"
+  "What are the key risks?",
+  "Summarize this in simple terms",
+  "Any hidden fees?",
+  "What are my obligations?",
+  "What if I terminate?",
+  "Any unusual terms?",
 ];
 
 export const ChatSection = ({ activeDocument, hasDocuments }: ChatSectionProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState<string[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  useEffect(() => { scrollToBottom(); }, [messages]);
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length === 0) return;
+    const last = messages[messages.length - 1];
+    setTimeout(() => setVisible((prev) => [...prev, last.id]), 80);
   }, [messages]);
 
-  const sendMessage = async (text: string) => {
+  const sendMessage = (text: string) => {
     if (!text.trim()) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: text.trim(),
-      sender: 'user',
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+    const userMessage: Message = { id: Date.now().toString(), text: text.trim(), sender: "user", timestamp: new Date() };
+    setMessages((prev) => [...prev, userMessage]);
     setInputText("");
     setIsTyping(true);
-
-    // Simulate AI response
     setTimeout(() => {
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: `I've analyzed your question about "${text.trim()}". Based on the document analysis, here are the key points you should know...\n\nThis is a simulated response. In a real implementation, this would be powered by AI analysis of your uploaded documents.`,
-        sender: 'ai',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, aiMessage]);
+      const aiMessage: Message = { id: (Date.now() + 1).toString(), text: `I've analyzed "${text.trim()}". This is a simulated AI response.`, sender: "ai", timestamp: new Date() };
+      setMessages((prev) => [...prev, aiMessage]);
       setIsTyping(false);
-    }, 2000);
+    }, 1400);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    sendMessage(inputText);
-  };
-
-  const handleSuggestedQuestion = (question: string) => {
-    sendMessage(question);
-  };
-
-  const exportConversation = () => {
-    // Simulate PDF export
-    console.log("Exporting conversation as PDF...");
-  };
+  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); sendMessage(inputText); };
+  const handleSuggested = (q: string) => sendMessage(q);
+  const titleDisplay = activeDocument ? activeDocument.replace(/\.pdf$/i, "") : "Document Analysis";
 
   return (
-    <div className="flex-1 flex flex-col bg-background">
-      {/* Header */}
-      <div className="p-6 border-b border-border bg-card/50">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="heading-sans text-2xl font-light">
-              {activeDocument || "Document Analysis"}
-            </h1>
-            {hasDocuments && (
-              <p className="text-sm text-muted-foreground mt-1">
-                AI-powered legal document analysis
-              </p>
-            )}
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "linear-gradient(180deg,#000,#050506)" }}>
+      <style>{`
+        .header { padding: 16px; margin: 16px; border-radius: 12px; display:flex; align-items:center; justify-content:space-between; background: linear-gradient(180deg,#061022,#091526); border:1px solid rgba(255,255,255,0.06); }
+        .header-left { display:flex; gap:12px; align-items:center; }
+        .title { color:#f3f4f6; font-weight:600; font-size:18px; }
+        .subtitle { color:#9ca3af; font-size:12px; margin-top:4px; }
+        .robot-icon { width:56px; height:56px; border-radius:10px; display:grid; place-items:center; background:#0b1626; border:1px solid rgba(255,255,255,0.08); }
+        .chat-card { margin: 0 16px 24px 16px; border-radius:12px; border:1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.005); flex:1; display:flex; flex-direction:column; }
+        .messages { padding: 24px; overflow-y:auto; }
+        .msg-row { display:flex; gap:14px; align-items:flex-start; margin-bottom:12px; }
+        .msg-row.user { flex-direction:row-reverse; }
+        .avatar { width:36px; height:36px; border-radius:999px; display:grid; place-items:center; background:#0c0c0c; border:1px solid rgba(255,255,255,0.06); }
+        .bubble { border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:10px; background:#0b0b0b; max-width:800px; color:#e6e6e6; font-size:14px; }
+        .typing-dots { display:flex; gap:6px; align-items:center; }
+        .dot { width:6px; height:6px; background:#cfcfcf; border-radius:999px; opacity:0.3; animation: blink 1s infinite; }
+        .dot:nth-child(2){ animation-delay:0.15s; }
+        .dot:nth-child(3){ animation-delay:0.3s; }
+        @keyframes blink { 0%,100%{opacity:0.3; transform:translateY(0);} 50%{opacity:1; transform:translateY(-4px);} }
+        .floating-input { position:absolute; left:50%; transform:translateX(-50%); bottom:92px; width:calc(100% - 160px); max-width:760px; display:flex; gap:8px; align-items:center; padding:8px 12px; border-radius:999px; background:#111; border:1px solid rgba(255,255,255,0.08); box-shadow:0 6px 18px rgba(0,0,0,0.6); }
+        .floating-input .input { flex:1; background:#111; border:none; color:#e6e6e6; font-size:13px; padding:6px 10px; outline:none; }
+        .suggest-row { position:absolute; left:50%; transform:translateX(-50%); bottom:18px; width:calc(100% - 200px); max-width:740px; display:flex; gap:8px; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,0.1) transparent; }
+        .suggest-row::-webkit-scrollbar { height:6px; }
+        .suggest-row::-webkit-scrollbar-track { background:transparent; }
+        .suggest-row::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:999px; }
+        .suggest-pill { flex:0 0 auto; white-space:nowrap; padding:8px 12px; border-radius:999px; background:#111; border:1px solid rgba(255,255,255,0.08); color:#e6e6e6; font-size:12px; transition:all .14s ease; }
+        .suggest-pill:hover { background:#1a1a1a; transform:translateY(-3px); }
+        @media (max-width:900px){ .floating-input{ width:calc(100% - 48px); left:24px; transform:none; } .suggest-row{ width:calc(100% - 48px); left:24px; transform:none; } }
+      `}</style>
+
+      <div className="header">
+        <div className="header-left">
+          <div className="robot-icon">
+            <BotIcon size={28} color="#e6e6e6" />
           </div>
-          
-          {messages.length > 0 && (
-            <Button 
-              onClick={exportConversation}
-              variant="outline" 
-              size="sm"
-              className="gap-2"
-            >
-              <Download className="h-4 w-4" />
-              Export PDF
-            </Button>
+          <div>
+            <div className="title">{titleDisplay}</div>
+            {activeDocument && <div className="subtitle">AI-powered legal document analysis</div>}
+          </div>
+        </div>
+      </div>
+
+      <div className="chat-card">
+        <div className="messages" ref={containerRef}>
+          {!hasDocuments && messages.length === 0 ? (
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:16 }}>
+              <div style={{ width:"100%", maxWidth:700, height:340, borderRadius:12, border:"1px solid rgba(255,255,255,0.06)", overflow:"hidden" }}>
+                <Suspense fallback={<div style={{height:"100%",display:"grid",placeItems:"center"}}>Loading 3D…</div>}>
+                  <Spline scene="https://prod.spline.design/n1Lad8xaG0iocaRW/scene.splinecode" />
+                </Suspense>
+              </div>
+              <h2 style={{ color:"#e6e6e6" }}>Ask Anything</h2>
+              <p style={{ color:"#9ca3af", textAlign:"center", maxWidth:520 }}>Upload your legal documents to begin AI-powered analysis and get instant insights.</p>
+            </div>
+          ) : (
+            <>
+              {messages.map(m => (
+                <div key={m.id} className={`msg-row ${m.sender==="user" ? "user":""}`}>
+                  <div className="avatar">{m.sender==="ai"?<BotIcon size={16} color="#9edbff"/>:<User size={16} color="#7efbb5"/>}</div>
+                  <div className="bubble">
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+                      <Badge variant="outline" style={{ fontSize:11, color:"#ccc", borderColor:"rgba(255,255,255,0.08)" }}>
+                        {m.sender==="ai"?"AI Assistant":"You"}
+                      </Badge>
+                      <span style={{ fontSize:11, color:"#777" }}>{m.timestamp.toLocaleTimeString()}</span>
+                    </div>
+                    {m.text}
+                  </div>
+                </div>
+              ))}
+              {isTyping && (
+                <div className="msg-row">
+                  <div className="avatar"><BotIcon size={16} color="#9edbff" /></div>
+                  <div className="bubble"><div className="typing-dots"><div className="dot"/><div className="dot"/><div className="dot"/></div></div>
+                </div>
+              )}
+              <div ref={messagesEndRef}/>
+            </>
           )}
         </div>
       </div>
 
-      {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto p-6">
-        {!hasDocuments ? (
-          <div className="text-center py-12">
-            <Bot className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="heading-sans text-xl mb-2 font-medium">Upload Documents to Start</h3>
-            <p className="text-muted-foreground">
-              Upload your legal documents to begin AI-powered analysis and get instant insights.
-            </p>
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="space-y-6">
-            <div className="text-center py-8">
-              <Bot className="h-12 w-12 mx-auto mb-4 text-primary" />
-              <h3 className="heading-sans text-xl mb-2 font-medium">Ready to Analyze</h3>
-              <p className="text-muted-foreground">
-                Ask me anything about your uploaded documents. I can explain complex terms, identify risks, and provide summaries.
-              </p>
-            </div>
+      <form onSubmit={handleSubmit} className="floating-input">
+        <input className="input" value={inputText} onChange={(e)=>setInputText(e.target.value)} placeholder="Ask about your documents..." disabled={isTyping}/>
+        <button type="button" style={{ width:36, height:36, borderRadius:8, background:"#1a1a1a", border:"1px solid rgba(255,255,255,0.08)" }}>
+          <Mic size={14} color="#e6e6e6"/>
+        </button>
+        <button type="submit" disabled={!inputText.trim()||isTyping} style={{ width:36, height:36, borderRadius:8, background: inputText.trim()&&!isTyping?"#0f86bf":"#1a1a1a", border:"1px solid rgba(255,255,255,0.08)" }}>
+          <Send size={14} color="#fff"/>
+        </button>
+      </form>
 
-            {/* Suggested Questions */}
-            <div>
-              <h4 className="text-sm font-medium mb-3 text-muted-foreground">Suggested Questions:</h4>
-              <div className="grid gap-2">
-                {suggestedQuestions.map((question, index) => (
-                  <Button
-                    key={index}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSuggestedQuestion(question)}
-                    className="justify-start text-left h-auto py-3 px-4 hover:bg-primary/5 hover:border-primary/20"
-                  >
-                    {question}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex gap-4 ${message.sender === 'user' ? 'flex-row-reverse' : ''}`}
-              >
-                <div className="flex-shrink-0">
-                  {message.sender === 'ai' ? (
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                      <Bot className="h-4 w-4 text-primary" />
-                    </div>
-                  ) : (
-                    <div className="w-8 h-8 bg-accent/10 rounded-full flex items-center justify-center">
-                      <User className="h-4 w-4 text-accent" />
-                    </div>
-                  )}
-                </div>
-                
-                <Card className={`p-4 max-w-2xl ${
-                  message.sender === 'user' 
-                    ? 'bg-primary/5 border-primary/20' 
-                    : 'bg-card border-border'
-                }`}>
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <Badge variant="outline" className="text-xs">
-                      {message.sender === 'ai' ? 'AI Assistant' : 'You'}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {message.timestamp.toLocaleTimeString()}
-                    </span>
-                  </div>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {message.text}
-                  </p>
-                </Card>
-              </div>
-            ))}
-
-            {isTyping && (
-              <div className="flex gap-4">
-                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                  <Bot className="h-4 w-4 text-primary" />
-                </div>
-                <Card className="p-4 bg-card border-border">
-                  <Badge variant="outline" className="text-xs mb-2">
-                    AI Assistant
-                  </Badge>
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 bg-primary/60 rounded-full animate-pulse" />
-                    <div className="w-2 h-2 bg-primary/60 rounded-full animate-pulse" style={{animationDelay: '0.2s'}} />
-                    <div className="w-2 h-2 bg-primary/60 rounded-full animate-pulse" style={{animationDelay: '0.4s'}} />
-                    <span className="ml-2 text-sm text-muted-foreground">AI is analyzing...</span>
-                  </div>
-                </Card>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
+      <div className="suggest-row">
+        {suggestedQuestions.map((q,i)=>(
+          <div key={i} className="suggest-pill" onClick={()=>handleSuggested(q)}>{q}</div>
+        ))}
       </div>
-
-      {/* Input Area */}
-      {hasDocuments && (
-        <div className="p-6 border-t border-border bg-card/30">
-          <form onSubmit={handleSubmit} className="flex gap-3">
-            <div className="flex-1">
-              <Input
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Ask about your legal documents..."
-                className="bg-background border-border"
-                disabled={isTyping}
-              />
-            </div>
-            <Button 
-              type="button"
-              size="icon"
-              variant="outline"
-              className="hover:bg-primary/10"
-            >
-              <Mic className="h-4 w-4" />
-            </Button>
-            <Button 
-              type="submit"
-              size="icon"
-              disabled={!inputText.trim() || isTyping}
-              className="bg-gradient-primary hover:shadow-glow-primary"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </form>
-        </div>
-      )}
     </div>
   );
 };

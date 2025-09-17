@@ -18,213 +18,200 @@ export const InsightsPanel = ({ activeDocument, hasDocuments }: InsightsPanelPro
 
   const generateSummary = async () => {
     setIsGeneratingSummary(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsGeneratingSummary(false);
-    }, 2000);
+    setTimeout(() => setIsGeneratingSummary(false), 2000);
   };
 
   const generateAudioOverview = async () => {
     setIsGeneratingAudio(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsGeneratingAudio(false);
-    }, 3000);
+    setTimeout(() => setIsGeneratingAudio(false), 3000);
   };
 
   const generateDetailedReport = async () => {
     setIsGeneratingReport(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsGeneratingReport(false);
-    }, 4000);
+    setTimeout(() => setIsGeneratingReport(false), 4000);
   };
 
-  if (!hasDocuments) {
-    return (
-      <div className="w-80 bg-card border-l border-border flex flex-col h-full">
-        <div className="p-6 border-b border-border">
-          <h2 className="heading-sans text-xl font-medium">Insights</h2>
-        </div>
+  return (
+    <div
+      className="w-80 flex flex-col h-full text-gray-100 border-l"
+      style={{
+        background: "linear-gradient(180deg,#000,#050505)",
+        borderColor: "rgba(255,255,255,0.08)",
+      }}
+    >
+      <style>{`
+        .ins-card {
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 12px;
+          background: rgba(255,255,255,0.02);
+          transition: all 0.25s ease;
+        }
+        .ins-card:hover {
+          transform: translateY(-4px);
+        }
+
+        /* Accent Themes */
+        .accent-green { color: #34d399; }
+        .accent-purple { color: #818cf8; }
+        .accent-red { color: #f87171; }
+        .accent-amber { color: #fbbf24; }
+
+        .btn-green {
+          background: rgba(52,211,153,0.12);
+          border: 1px solid rgba(52,211,153,0.25);
+          color: #34d399;
+        }
+        .btn-green:hover { background: rgba(52,211,153,0.18); }
+
+        .btn-purple {
+          background: rgba(129,140,248,0.12);
+          border: 1px solid rgba(129,140,248,0.25);
+          color: #818cf8;
+        }
+        .btn-purple:hover { background: rgba(129,140,248,0.18); }
+
+        .btn-red {
+          background: rgba(248,113,113,0.12);
+          border: 1px solid rgba(248,113,113,0.25);
+          color: #f87171;
+        }
+        .btn-red:hover { background: rgba(248,113,113,0.18); }
+
+        .btn-amber {
+          background: rgba(251,191,36,0.12);
+          border: 1px solid rgba(251,191,36,0.25);
+          color: #fbbf24;
+        }
+        .btn-amber:hover { background: rgba(251,191,36,0.18); }
+      `}</style>
+
+      {/* Header */}
+      <div className="p-6 border-b border-[rgba(255,255,255,0.08)]">
+        <h2 className="heading-sans text-xl font-medium">Insights</h2>
+        {activeDocument && (
+          <p className="text-xs text-gray-400 mt-1 truncate">{activeDocument}</p>
+        )}
+      </div>
+
+      {!hasDocuments ? (
         <div className="flex-1 flex items-center justify-center p-6">
-          <div className="text-center text-muted-foreground">
+          <div className="text-center text-gray-500">
             <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p className="text-sm">Upload documents to view insights</p>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-80 bg-card border-l border-border flex flex-col h-full">
-      {/* Header */}
-      <div className="p-6 border-b border-border">
-        <h2 className="heading-sans text-xl font-medium">Insights</h2>
-        {activeDocument && (
-          <p className="text-xs text-muted-foreground mt-1 truncate">
-            {activeDocument}
-          </p>
-        )}
-      </div>
-
-      {/* Action Cards */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Quick Summary */}
-        <Card className="p-4 hover:shadow-elegant transition-smooth">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <FileText className="h-4 w-4 text-primary" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-sm">Quick Summary</h3>
-              <p className="text-xs text-muted-foreground">Get a concise overview</p>
-            </div>
-          </div>
-          <Button 
-            onClick={generateSummary}
-            disabled={isGeneratingSummary}
-            className="w-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20"
-            variant="outline"
-            size="sm"
-          >
-            {isGeneratingSummary ? (
-              <>
-                <div className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin mr-2" />
-                Analyzing...
-              </>
-            ) : (
-              "Generate Summary"
-            )}
-          </Button>
-        </Card>
-
-        {/* Audio Overview */}
-        <Card className="p-4 hover:shadow-elegant transition-smooth">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-accent/10 rounded-lg">
-              <Volume2 className="h-4 w-4 text-accent" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-sm">Audio Overview</h3>
-              <p className="text-xs text-muted-foreground">Listen to the summary</p>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Button 
-              onClick={generateAudioOverview}
-              disabled={isGeneratingAudio}
-              className="w-full bg-accent/10 hover:bg-accent/20 text-accent border border-accent/20"
-              variant="outline"
-              size="sm"
-            >
-              {isGeneratingAudio ? (
-                <>
-                  <div className="w-3 h-3 border-2 border-accent/30 border-t-accent rounded-full animate-spin mr-2" />
-                  Creating Audio...
-                </>
-              ) : (
-                "Create Audio"
-              )}
-            </Button>
-            {!isGeneratingAudio && (
-              <Button 
-                variant="ghost" 
+      ) : (
+        <>
+          {/* Action Cards */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Quick Summary */}
+            <Card className="p-4 ins-card hover:shadow-[0_0_15px_rgba(52,211,153,0.2)]">
+              <div className="flex items-center gap-3 mb-3">
+                <FileText className="h-5 w-5 accent-green" />
+                <div>
+                  <h3 className="font-semibold text-sm">Quick Summary</h3>
+                  <p className="text-xs text-gray-400">Get a concise overview</p>
+                </div>
+              </div>
+              <Button
+                onClick={generateSummary}
+                disabled={isGeneratingSummary}
+                className="w-full btn-green"
                 size="sm"
-                className="w-full text-muted-foreground"
-                disabled
               >
-                <Play className="h-3 w-3 mr-2" />
-                No Audio Available
+                {isGeneratingSummary ? "Analyzing..." : "Generate Summary"}
               </Button>
-            )}
-          </div>
-        </Card>
+            </Card>
 
-        {/* Detailed Report */}
-        <Card className="p-4 hover:shadow-elegant transition-smooth">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-destructive/10 rounded-lg">
-              <BarChart3 className="h-4 w-4 text-destructive" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-sm">Risk Report</h3>
-              <p className="text-xs text-muted-foreground">Detailed analysis with graphs</p>
-            </div>
-          </div>
-          <Button 
-            onClick={generateDetailedReport}
-            disabled={isGeneratingReport}
-            className="w-full bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/20"
-            variant="outline"
-            size="sm"
-          >
-            {isGeneratingReport ? (
-              <>
-                <div className="w-3 h-3 border-2 border-destructive/30 border-t-destructive rounded-full animate-spin mr-2" />
-                Generating Report...
-              </>
-            ) : (
-              "Generate Report"
-            )}
-          </Button>
-        </Card>
+            {/* Audio Overview */}
+            <Card className="p-4 ins-card hover:shadow-[0_0_15px_rgba(129,140,248,0.2)]">
+              <div className="flex items-center gap-3 mb-3">
+                <Volume2 className="h-5 w-5 accent-purple" />
+                <div>
+                  <h3 className="font-semibold text-sm">Audio Overview</h3>
+                  <p className="text-xs text-gray-400">Listen to the summary</p>
+                </div>
+              </div>
+              <Button
+                onClick={generateAudioOverview}
+                disabled={isGeneratingAudio}
+                className="w-full btn-purple"
+                size="sm"
+              >
+                {isGeneratingAudio ? "Creating Audio..." : "Create Audio"}
+              </Button>
+              {!isGeneratingAudio && (
+                <Button variant="ghost" size="sm" disabled className="w-full text-gray-500 mt-2">
+                  <Play className="h-3 w-3 mr-2" /> No Audio Available
+                </Button>
+              )}
+            </Card>
 
-        {/* Add Notes */}
-        <Card className="p-4 hover:shadow-elegant transition-smooth">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-muted rounded-lg">
-              <StickyNote className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-sm">Personal Notes</h3>
-              <p className="text-xs text-muted-foreground">Add your thoughts</p>
-            </div>
+            {/* Risk Report */}
+            <Card className="p-4 ins-card hover:shadow-[0_0_15px_rgba(248,113,113,0.2)]">
+              <div className="flex items-center gap-3 mb-3">
+                <BarChart3 className="h-5 w-5 accent-red" />
+                <div>
+                  <h3 className="font-semibold text-sm">Risk Report</h3>
+                  <p className="text-xs text-gray-400">Detailed analysis with graphs</p>
+                </div>
+              </div>
+              <Button
+                onClick={generateDetailedReport}
+                disabled={isGeneratingReport}
+                className="w-full btn-red"
+                size="sm"
+              >
+                {isGeneratingReport ? "Generating Report..." : "Generate Report"}
+              </Button>
+            </Card>
+
+            {/* Personal Notes */}
+            <Card className="p-4 ins-card hover:shadow-[0_0_15px_rgba(251,191,36,0.2)]">
+              <div className="flex items-center gap-3 mb-3">
+                <StickyNote className="h-5 w-5 accent-amber" />
+                <div>
+                  <h3 className="font-semibold text-sm">Personal Notes</h3>
+                  <p className="text-xs text-gray-400">Add your thoughts</p>
+                </div>
+              </div>
+              <Textarea
+                value={userNotes}
+                onChange={(e) => setUserNotes(e.target.value)}
+                placeholder="Add your notes about this document..."
+                className="min-h-[80px] text-xs resize-none bg-black/40 border border-gray-700 text-gray-200"
+              />
+              {userNotes.trim() && (
+                <Button size="sm" className="w-full mt-2 btn-amber">
+                  Save Notes
+                </Button>
+              )}
+            </Card>
+
+            {/* Recent Activity */}
+            <Card className="p-4 ins-card">
+              <h3 className="font-semibold text-sm mb-3">Recent Activity</h3>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-xs">Summary</Badge>
+                  <span className="text-gray-400">Generated 2 min ago</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">Analysis</Badge>
+                  <span className="text-gray-400">Started 5 min ago</span>
+                </div>
+              </div>
+            </Card>
           </div>
-          <Textarea
-            value={userNotes}
-            onChange={(e) => setUserNotes(e.target.value)}
-            placeholder="Add your notes about this document..."
-            className="min-h-[80px] text-xs resize-none"
-          />
-          {userNotes.trim() && (
-            <Button 
-              size="sm"
-              className="w-full mt-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20"
-              variant="outline"
-            >
-              Save Notes
+
+          {/* Footer */}
+          <div className="p-4 border-t border-[rgba(255,255,255,0.08)]">
+            <Button variant="outline" size="sm" className="w-full border-gray-600 text-gray-300 hover:bg-gray-800">
+              <Download className="h-3 w-3 mr-2" /> Export All Insights
             </Button>
-          )}
-        </Card>
-
-        {/* Recent Activity */}
-        <Card className="p-4">
-          <h3 className="font-semibold text-sm mb-3">Recent Activity</h3>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs">
-              <Badge variant="secondary" className="text-xs">Summary</Badge>
-              <span className="text-muted-foreground">Generated 2 min ago</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <Badge variant="outline" className="text-xs">Analysis</Badge>
-              <span className="text-muted-foreground">Started 5 min ago</span>
-            </div>
           </div>
-        </Card>
-      </div>
-
-      {/* Footer Actions */}
-      <div className="p-4 border-t border-border space-y-2">
-        <Button 
-          variant="outline" 
-          size="sm"
-          className="w-full gap-2"
-        >
-          <Download className="h-3 w-3" />
-          Export All Insights
-        </Button>
-      </div>
+        </>
+      )}
     </div>
   );
 };
