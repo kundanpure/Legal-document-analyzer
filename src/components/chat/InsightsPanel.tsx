@@ -4,31 +4,122 @@ import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Volume2, BarChart3, StickyNote, Download, Play } from "lucide-react";
+import { useGenerateSummary, useGenerateAudio, useGenerateReport, useInsights, useExportConversation } from "@/hooks/api";
 
 interface InsightsPanelProps {
   activeDocument: string | null;
   hasDocuments: boolean;
+  activeFileId?: string | null;
+  conversationId?: string | null;
 }
 
-export const InsightsPanel = ({ activeDocument, hasDocuments }: InsightsPanelProps) => {
+export const InsightsPanel = ({ activeDocument, hasDocuments, activeFileId, conversationId }: InsightsPanelProps) => {
   const [userNotes, setUserNotes] = useState("");
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+
+  // Use real API hooks
+  const generateSummaryMutation = useGenerateSummary();
+  const generateAudioMutation = useGenerateAudio();
+  const generateReportMutation = useGenerateReport();
+  const exportConversationMutation = useExportConversation();
+
+  // Get insights data
+  const { data: insightsData, refetch: refetchInsights } = useInsights(activeFileId);
 
   const generateSummary = async () => {
-    setIsGeneratingSummary(true);
-    setTimeout(() => setIsGeneratingSummary(false), 2000);
+    if (!activeFileId) return;
+    try {
+      await generateSummaryMutation.mutateAsync({ fileId: activeFileId });
+      // Refetch insights to get updated data
+      setTimeout(() => refetchInsights(), 1000);
+    } catch (error) {
+      console.error('Generate summary error:', error);
+    }
   };
 
   const generateAudioOverview = async () => {
-    setIsGeneratingAudio(true);
-    setTimeout(() => setIsGeneratingAudio(false), 3000);
+    if (!activeFileId) return;
+    try {
+      await generateAudioMutation.mutateAsync({ 
+        fileId: activeFileId,
+        options: {
+          voice_type: "female",
+          language: "en",
+          speed: 1.0
+        }
+      });
+      // Refetch insights to get updated data
+      setTimeout(() => refetchInsights(), 1000);
+    } catch (error) {
+      console.error('Generate audio error:', error);
+    }
   };
 
   const generateDetailedReport = async () => {
-    setIsGeneratingReport(true);
-    setTimeout(() => setIsGeneratingReport(false), 4000);
+    if (!activeFileId) return;
+    try {
+      await generateReportMutation.mutateAsync({ 
+        fileId: activeFileId,
+        options: {
+          type: "comprehensive",
+          format: "pdf",
+          language: "en"
+        }
+      });
+      // Refetch insights to get updated data
+      setTimeout(() => refetchInsights(), 1000);
+    } catch (error) {
+      console.error('Generate report error:', error);
+    }
+  };
+
+  const exportAllInsights = async () => {
+    if (!conversationId) {
+      console.warn('No conversation ID available for export');
+      return;
+    }
+    try {
+      await exportConversationMutation.mutateAsync({ 
+        conversationId,
+        format: "pdf"
+      });
+    } catch (error) {
+      console.error('Export conversation error:', error);
+    }
+  };
+
+  // Get insights status - handle both nested and flat response structures
+  type InsightType = {
+    summary?: { available?: boolean; url?: string; created_at?: string };
+    summary_available?: boolean;
+    summary_url?: string;
+    audio?: { available?: boolean; url?: string; created_at?: string; duration?: string };
+    audio_available?: boolean;
+    audio_url?: string;
+    report?: { available?: boolean; url?: string; created_at?: string; page_count?: number };
+    report_available?: boolean;
+    report_url?: string;
+    [key: string]: any;
+  };
+  const insights: InsightType = (insightsData?.insights || insightsData || {}) as InsightType;
+  const summaryAvailable = (insights.summary?.available ?? insights.summary_available) || false;
+  const audioAvailable = (insights.audio?.available ?? insights.audio_available) || false;
+  const reportAvailable = (insights.report?.available ?? insights.report_available) || false;
+
+  // Handle download URLs
+  const handleDownload = (url: string, filename: string) => {
+    if (!url) {
+      console.error('No download URL available');
+      return;
+    }
+    
+    // Create download link
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -62,6 +153,11 @@ export const InsightsPanel = ({ activeDocument, hasDocuments }: InsightsPanelPro
           color: #34d399;
         }
         .btn-green:hover { background: rgba(52,211,153,0.18); }
+        .btn-green:disabled { 
+          opacity: 0.5; 
+          cursor: not-allowed; 
+          background: rgba(52,211,153,0.06);
+        }
 
         .btn-purple {
           background: rgba(129,140,248,0.12);
@@ -69,6 +165,11 @@ export const InsightsPanel = ({ activeDocument, hasDocuments }: InsightsPanelPro
           color: #818cf8;
         }
         .btn-purple:hover { background: rgba(129,140,248,0.18); }
+        .btn-purple:disabled { 
+          opacity: 0.5; 
+          cursor: not-allowed; 
+          background: rgba(129,140,248,0.06);
+        }
 
         .btn-red {
           background: rgba(248,113,113,0.12);
@@ -76,6 +177,11 @@ export const InsightsPanel = ({ activeDocument, hasDocuments }: InsightsPanelPro
           color: #f87171;
         }
         .btn-red:hover { background: rgba(248,113,113,0.18); }
+        .btn-red:disabled { 
+          opacity: 0.5; 
+          cursor: not-allowed; 
+          background: rgba(248,113,113,0.06);
+        }
 
         .btn-amber {
           background: rgba(251,191,36,0.12);
@@ -83,6 +189,13 @@ export const InsightsPanel = ({ activeDocument, hasDocuments }: InsightsPanelPro
           color: #fbbf24;
         }
         .btn-amber:hover { background: rgba(251,191,36,0.18); }
+
+        .btn-success {
+          background: rgba(34,197,94,0.12);
+          border: 1px solid rgba(34,197,94,0.25);
+          color: #22c55e;
+        }
+        .btn-success:hover { background: rgba(34,197,94,0.18); }
       `}</style>
 
       {/* Header */}
@@ -113,14 +226,36 @@ export const InsightsPanel = ({ activeDocument, hasDocuments }: InsightsPanelPro
                   <p className="text-xs text-gray-400">Get a concise overview</p>
                 </div>
               </div>
-              <Button
-                onClick={generateSummary}
-                disabled={isGeneratingSummary}
-                className="w-full btn-green"
-                size="sm"
-              >
-                {isGeneratingSummary ? "Analyzing..." : "Generate Summary"}
-              </Button>
+              
+              {summaryAvailable ? (
+                <div className="space-y-2">
+                  <Badge variant="secondary" className="text-xs w-full justify-center">
+                    Summary Available
+                  </Badge>
+                  <Button
+                    onClick={() => {
+                      const url = insights.summary?.url || insights.summary_url;
+                      const filename = `summary_${activeFileId || 'document'}.pdf`;
+                      handleDownload(url, filename);
+                    }}
+                    className="w-full btn-success"
+                    size="sm"
+                    disabled={!insights.summary?.url && !insights.summary_url}
+                  >
+                    <Download className="h-3 w-3 mr-2" />
+                    Download Summary
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  onClick={generateSummary}
+                  disabled={generateSummaryMutation.isPending || !activeFileId}
+                  className="w-full btn-green"
+                  size="sm"
+                >
+                  {generateSummaryMutation.isPending ? "Analyzing..." : "Generate Summary"}
+                </Button>
+              )}
             </Card>
 
             {/* Audio Overview */}
@@ -132,17 +267,34 @@ export const InsightsPanel = ({ activeDocument, hasDocuments }: InsightsPanelPro
                   <p className="text-xs text-gray-400">Listen to the summary</p>
                 </div>
               </div>
-              <Button
-                onClick={generateAudioOverview}
-                disabled={isGeneratingAudio}
-                className="w-full btn-purple"
-                size="sm"
-              >
-                {isGeneratingAudio ? "Creating Audio..." : "Create Audio"}
-              </Button>
-              {!isGeneratingAudio && (
-                <Button variant="ghost" size="sm" disabled className="w-full text-gray-500 mt-2">
-                  <Play className="h-3 w-3 mr-2" /> No Audio Available
+              
+              {audioAvailable ? (
+                <div className="space-y-2">
+                  <Badge variant="secondary" className="text-xs w-full justify-center">
+                    Audio Available
+                  </Badge>
+                  <Button
+                    onClick={() => {
+                      const url = insights.audio?.url || insights.audio_url;
+                      const filename = `audio_${activeFileId || 'document'}.mp3`;
+                      handleDownload(url, filename);
+                    }}
+                    className="w-full btn-success"
+                    size="sm"
+                    disabled={!insights.audio?.url && !insights.audio_url}
+                  >
+                    <Play className="h-3 w-3 mr-2" />
+                    Play Audio {insights.audio?.duration ? `(${insights.audio.duration})` : ''}
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  onClick={generateAudioOverview}
+                  disabled={generateAudioMutation.isPending || !activeFileId}
+                  className="w-full btn-purple"
+                  size="sm"
+                >
+                  {generateAudioMutation.isPending ? "Creating Audio..." : "Create Audio"}
                 </Button>
               )}
             </Card>
@@ -156,14 +308,36 @@ export const InsightsPanel = ({ activeDocument, hasDocuments }: InsightsPanelPro
                   <p className="text-xs text-gray-400">Detailed analysis with graphs</p>
                 </div>
               </div>
-              <Button
-                onClick={generateDetailedReport}
-                disabled={isGeneratingReport}
-                className="w-full btn-red"
-                size="sm"
-              >
-                {isGeneratingReport ? "Generating Report..." : "Generate Report"}
-              </Button>
+              
+              {reportAvailable ? (
+                <div className="space-y-2">
+                  <Badge variant="secondary" className="text-xs w-full justify-center">
+                    Report Available {insights.report?.page_count ? `(${insights.report.page_count} pages)` : ''}
+                  </Badge>
+                  <Button
+                    onClick={() => {
+                      const url = insights.report?.url || insights.report_url;
+                      const filename = `report_${activeFileId || 'document'}.pdf`;
+                      handleDownload(url, filename);
+                    }}
+                    className="w-full btn-success"
+                    size="sm"
+                    disabled={!insights.report?.url && !insights.report_url}
+                  >
+                    <Download className="h-3 w-3 mr-2" />
+                    Download Report
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  onClick={generateDetailedReport}
+                  disabled={generateReportMutation.isPending || !activeFileId}
+                  className="w-full btn-red"
+                  size="sm"
+                >
+                  {generateReportMutation.isPending ? "Generating Report..." : "Generate Report"}
+                </Button>
+              )}
             </Card>
 
             {/* Personal Notes */}
@@ -192,23 +366,52 @@ export const InsightsPanel = ({ activeDocument, hasDocuments }: InsightsPanelPro
             <Card className="p-4 ins-card">
               <h3 className="font-semibold text-sm mb-3">Recent Activity</h3>
               <div className="space-y-2 text-xs">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">Summary</Badge>
-                  <span className="text-gray-400">Generated 2 min ago</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">Analysis</Badge>
-                  <span className="text-gray-400">Started 5 min ago</span>
-                </div>
+                {summaryAvailable && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs">Summary</Badge>
+                    <span className="text-gray-400">
+                      Generated {insights.summary?.created_at ? new Date(insights.summary.created_at).toLocaleString() : 'recently'}
+                    </span>
+                  </div>
+                )}
+                {audioAvailable && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">Audio</Badge>
+                    <span className="text-gray-400">
+                      Generated {insights.audio?.created_at ? new Date(insights.audio.created_at).toLocaleString() : 'recently'}
+                    </span>
+                  </div>
+                )}
+                {reportAvailable && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">Report</Badge>
+                    <span className="text-gray-400">
+                      Generated {insights.report?.created_at ? new Date(insights.report.created_at).toLocaleString() : 'recently'}
+                    </span>
+                  </div>
+                )}
+                {!summaryAvailable && !audioAvailable && !reportAvailable && (
+                  <p className="text-gray-500">No recent activity</p>
+                )}
               </div>
             </Card>
           </div>
 
           {/* Footer */}
           <div className="p-4 border-t border-[rgba(255,255,255,0.08)]">
-            <Button variant="outline" size="sm" className="w-full border-gray-600 text-gray-300 hover:bg-gray-800">
-              <Download className="h-3 w-3 mr-2" /> Export All Insights
+            <Button 
+              onClick={exportAllInsights}
+              disabled={exportConversationMutation.isPending || !conversationId}
+              variant="outline" 
+              size="sm" 
+              className="w-full border-gray-600 text-gray-300 hover:bg-gray-800"
+            >
+              <Download className="h-3 w-3 mr-2" /> 
+              {exportConversationMutation.isPending ? "Exporting..." : "Export All Insights"}
             </Button>
+            {!conversationId && (
+              <p className="text-xs text-gray-500 mt-2 text-center">Start a conversation to enable export</p>
+            )}
           </div>
         </>
       )}

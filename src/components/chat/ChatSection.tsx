@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Send, Mic, Bot as BotIcon, User } from "lucide-react";
+import { useChat } from "@/hooks/api";
 
 const Spline = lazy(() => import("@splinetool/react-spline"));
 
@@ -12,11 +13,14 @@ interface Message {
   text: string;
   sender: "user" | "ai";
   timestamp: Date;
+  conversation_id?: string;
 }
 
 interface ChatSectionProps {
   activeDocument: string | null;
   hasDocuments: boolean;
+  activeFileId?: string | null;
+  onConversationIdChange?: (conversationId: string) => void; // Add this prop
 }
 
 const suggestedQuestions = [
@@ -28,13 +32,21 @@ const suggestedQuestions = [
   "Any unusual terms?",
 ];
 
-export const ChatSection = ({ activeDocument, hasDocuments }: ChatSectionProps) => {
+export const ChatSection = ({ 
+  activeDocument, 
+  hasDocuments, 
+  activeFileId,
+  onConversationIdChange 
+}: ChatSectionProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [visible, setVisible] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // Use the real chat API
+  const chatMutation = useChat();
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   useEffect(() => { scrollToBottom(); }, [messages]);
@@ -44,22 +56,72 @@ export const ChatSection = ({ activeDocument, hasDocuments }: ChatSectionProps) 
     setTimeout(() => setVisible((prev) => [...prev, last.id]), 80);
   }, [messages]);
 
-  const sendMessage = (text: string) => {
+  // Update parent when conversation ID changes
+  useEffect(() => {
+    if (conversationId && onConversationIdChange) {
+      onConversationIdChange(conversationId);
+    }
+  }, [conversationId, onConversationIdChange]);
+
+  const sendMessage = async (text: string) => {
     if (!text.trim()) return;
-    const userMessage: Message = { id: Date.now().toString(), text: text.trim(), sender: "user", timestamp: new Date() };
+    
+    const userMessage: Message = { 
+      id: Date.now().toString(), 
+      text: text.trim(), 
+      sender: "user", 
+      timestamp: new Date(),
+      conversation_id: conversationId || undefined
+    };
+    
     setMessages((prev) => [...prev, userMessage]);
     setInputText("");
-    setIsTyping(true);
-    setTimeout(() => {
-      const aiMessage: Message = { id: (Date.now() + 1).toString(), text: `I've analyzed "${text.trim()}". This is a simulated AI response.`, sender: "ai", timestamp: new Date() };
+
+    try {
+      // Call the real API
+      const response = await chatMutation.mutateAsync({
+        message: text.trim(),
+        file_id: activeFileId || undefined,
+        conversation_id: conversationId || undefined,
+      });
+
+      // Update conversation ID if it's new
+      if (!conversationId && response.conversation_id) {
+        setConversationId(response.conversation_id);
+      }
+
+      const aiMessage: Message = { 
+        id: response.message_id || (Date.now() + 1).toString(), 
+        text: response.response || "I received your message.", 
+        sender: "ai", 
+        timestamp: new Date(),
+        conversation_id: response.conversation_id 
+      };
+      
       setMessages((prev) => [...prev, aiMessage]);
-      setIsTyping(false);
-    }, 1400);
+
+    } catch (error: any) {
+      console.error('Chat error:', error);
+      
+      // Fallback error message
+      const errorMessage: Message = { 
+        id: (Date.now() + 1).toString(), 
+        text: `Sorry, I encountered an error: ${error?.message || 'Please try again.'}`, 
+        sender: "ai", 
+        timestamp: new Date() 
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); sendMessage(inputText); };
+  const handleSubmit = (e: React.FormEvent) => { 
+    e.preventDefault(); 
+    sendMessage(inputText); 
+  };
+
   const handleSuggested = (q: string) => sendMessage(q);
   const titleDisplay = activeDocument ? activeDocument.replace(/\.pdf$/i, "") : "Document Analysis";
+  const isLoading = chatMutation.isPending;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, background: "linear-gradient(180deg,#000,#050506)" }}>
@@ -86,7 +148,7 @@ export const ChatSection = ({ activeDocument, hasDocuments }: ChatSectionProps) 
         .suggest-row::-webkit-scrollbar { height:6px; }
         .suggest-row::-webkit-scrollbar-track { background:transparent; }
         .suggest-row::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:999px; }
-        .suggest-pill { flex:0 0 auto; white-space:nowrap; padding:8px 12px; border-radius:999px; background:#111; border:1px solid rgba(255,255,255,0.08); color:#e6e6e6; font-size:12px; transition:all .14s ease; }
+        .suggest-pill { flex:0 0 auto; white-space:nowrap; padding:8px 12px; border-radius:999px; background:#111; border:1px solid rgba(255,255,255,0.08); color:#e6e6e6; font-size:12px; transition:all .14s ease; cursor:pointer; }
         .suggest-pill:hover { background:#1a1a1a; transform:translateY(-3px); }
         @media (max-width:900px){ .floating-input{ width:calc(100% - 48px); left:24px; transform:none; } .suggest-row{ width:calc(100% - 48px); left:24px; transform:none; } }
       `}</style>
@@ -131,7 +193,7 @@ export const ChatSection = ({ activeDocument, hasDocuments }: ChatSectionProps) 
                   </div>
                 </div>
               ))}
-              {isTyping && (
+              {isLoading && (
                 <div className="msg-row">
                   <div className="avatar"><BotIcon size={16} color="#9edbff" /></div>
                   <div className="bubble"><div className="typing-dots"><div className="dot"/><div className="dot"/><div className="dot"/></div></div>
@@ -144,11 +206,30 @@ export const ChatSection = ({ activeDocument, hasDocuments }: ChatSectionProps) 
       </div>
 
       <form onSubmit={handleSubmit} className="floating-input">
-        <input className="input" value={inputText} onChange={(e)=>setInputText(e.target.value)} placeholder="Ask about your documents..." disabled={isTyping}/>
-        <button type="button" style={{ width:36, height:36, borderRadius:8, background:"#1a1a1a", border:"1px solid rgba(255,255,255,0.08)" }}>
+        <input 
+          className="input" 
+          value={inputText} 
+          onChange={(e)=>setInputText(e.target.value)} 
+          placeholder="Ask about your documents..." 
+          disabled={isLoading}
+        />
+        <button 
+          type="button" 
+          style={{ width:36, height:36, borderRadius:8, background:"#1a1a1a", border:"1px solid rgba(255,255,255,0.08)" }}
+        >
           <Mic size={14} color="#e6e6e6"/>
         </button>
-        <button type="submit" disabled={!inputText.trim()||isTyping} style={{ width:36, height:36, borderRadius:8, background: inputText.trim()&&!isTyping?"#0f86bf":"#1a1a1a", border:"1px solid rgba(255,255,255,0.08)" }}>
+        <button 
+          type="submit" 
+          disabled={!inputText.trim()||isLoading} 
+          style={{ 
+            width:36, 
+            height:36, 
+            borderRadius:8, 
+            background: inputText.trim()&&!isLoading?"#0f86bf":"#1a1a1a", 
+            border:"1px solid rgba(255,255,255,0.08)" 
+          }}
+        >
           <Send size={14} color="#fff"/>
         </button>
       </form>

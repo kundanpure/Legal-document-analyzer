@@ -3,13 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Upload, FileText, X, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, FileText, X, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onFilesUploaded: (files: File[]) => void;
   currentFileCount: number;
+  isUploading?: boolean;
 }
 
 const MAX_FILES = 50;
@@ -20,12 +21,12 @@ export const UploadModal = ({
   isOpen, 
   onClose, 
   onFilesUploaded, 
-  currentFileCount 
+  currentFileCount,
+  isUploading = false
 }: UploadModalProps) => {
   const [dragActive, setDragActive] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
 
   const validateFile = (file: File): string | null => {
     if (!ACCEPTED_TYPES.includes(file.type)) {
@@ -45,7 +46,15 @@ export const UploadModal = ({
     const newErrors: string[] = [];
     const validFiles: File[] = [];
 
+    // Filter out duplicates
+    const existingNames = selectedFiles.map(f => f.name);
+    
     fileArray.forEach(file => {
+      if (existingNames.includes(file.name)) {
+        newErrors.push(`${file.name}: File already selected`);
+        return;
+      }
+      
       const error = validateFile(file);
       if (error) {
         newErrors.push(error);
@@ -54,7 +63,7 @@ export const UploadModal = ({
       }
     });
 
-    setErrors(newErrors);
+    setErrors(prev => [...prev.filter(e => !fileArray.some(f => e.includes(f.name))), ...newErrors]);
     setSelectedFiles(prev => [...prev, ...validFiles]);
   };
 
@@ -87,20 +96,33 @@ export const UploadModal = ({
   };
 
   const removeFile = (index: number) => {
+    const removedFile = selectedFiles[index];
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    // Remove related errors
+    setErrors(prev => prev.filter(error => !error.includes(removedFile.name)));
+  };
+
+  const clearAllErrors = () => {
+    setErrors([]);
   };
 
   const handleUpload = async () => {
     if (selectedFiles.length === 0) return;
     
-    setUploading(true);
-    // Simulate upload delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    onFilesUploaded(selectedFiles);
-    setSelectedFiles([]);
-    setErrors([]);
-    setUploading(false);
+    try {
+      // Clear any existing errors
+      clearAllErrors();
+      
+      // Call the parent function
+      await onFilesUploaded(selectedFiles);
+      
+      // Reset state on successful upload
+      setSelectedFiles([]);
+      setErrors([]);
+    } catch (error: any) {
+      // Handle upload errors
+      setErrors([`Upload failed: ${error?.message || 'Please try again'}`]);
+    }
   };
 
   const formatFileSize = (bytes: number) => {
@@ -110,6 +132,8 @@ export const UploadModal = ({
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
+
+  const canUpload = selectedFiles.length > 0 && !isUploading && currentFileCount + selectedFiles.length <= MAX_FILES;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -147,25 +171,31 @@ export const UploadModal = ({
               dragActive 
                 ? 'border-primary bg-gradient-primary/5 shadow-soft' 
                 : 'border-border/50 hover:border-primary/30 hover:bg-gradient-primary/2 hover:shadow-soft'
-            }`}
+            } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
-            onClick={() => document.getElementById('file-input')?.click()}
+            onClick={() => !isUploading && document.getElementById('file-input')?.click()}
           >
-            <Upload className={`h-16 w-16 mx-auto mb-6 ${
-              dragActive ? 'text-primary' : 'text-muted-foreground'
-            }`} />
+            {isUploading ? (
+              <Loader2 className="h-16 w-16 mx-auto mb-6 text-primary animate-spin" />
+            ) : (
+              <Upload className={`h-16 w-16 mx-auto mb-6 ${
+                dragActive ? 'text-primary' : 'text-muted-foreground'
+              }`} />
+            )}
             <h3 className="font-medium mb-3 text-lg">
-              {dragActive ? 'Drop files here' : 'Upload PDF Documents'}
+              {isUploading ? 'Uploading files...' : dragActive ? 'Drop files here' : 'Upload PDF Documents'}
             </h3>
             <p className="text-muted-foreground mb-6 font-light leading-relaxed">
-              Drag and drop your files here, or click to browse
+              {isUploading ? 'Please wait while your files are being processed' : 'Drag and drop your files here, or click to browse'}
             </p>
-            <Button variant="outline" className="px-8 py-3 rounded-xl font-medium">
-              Choose Files
-            </Button>
+            {!isUploading && (
+              <Button variant="outline" className="px-8 py-3 rounded-xl font-medium">
+                Choose Files
+              </Button>
+            )}
             <input
               id="file-input"
               type="file"
@@ -173,13 +203,26 @@ export const UploadModal = ({
               accept=".pdf"
               onChange={handleFileInput}
               className="hidden"
+              disabled={isUploading}
             />
           </Card>
 
           {/* Selected Files */}
           {selectedFiles.length > 0 && (
             <div className="max-h-40 overflow-y-auto">
-              <h4 className="font-medium text-sm mb-4">Selected Files ({selectedFiles.length})</h4>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-medium text-sm">Selected Files ({selectedFiles.length})</h4>
+                {!isUploading && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setSelectedFiles([])}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Clear All
+                  </Button>
+                )}
+              </div>
               <div className="space-y-3">
                 {selectedFiles.map((file, index) => (
                   <div key={index} className="flex items-center gap-4 p-4 bg-card rounded-xl border-0 shadow-soft">
@@ -190,14 +233,18 @@ export const UploadModal = ({
                         {formatFileSize(file.size)}
                       </p>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => removeFile(index)}
-                      className="h-8 w-8 p-0 rounded-lg hover:bg-muted"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                    {isUploading ? (
+                      <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeFile(index)}
+                        className="h-8 w-8 p-0 rounded-lg hover:bg-muted"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -207,28 +254,46 @@ export const UploadModal = ({
           {/* Errors */}
           {errors.length > 0 && (
             <div className="space-y-2">
-              {errors.map((error, index) => (
-                <div key={index} className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-                  <AlertCircle className="h-4 w-4 text-destructive mt-0.5" />
-                  <p className="text-sm text-destructive">{error}</p>
-                </div>
-              ))}
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-sm text-destructive">Upload Errors ({errors.length})</h4>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={clearAllErrors}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Clear
+                </Button>
+              </div>
+              <div className="max-h-32 overflow-y-auto space-y-2">
+                {errors.map((error, index) => (
+                  <div key={index} className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                    <AlertCircle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                    <p className="text-sm text-destructive">{error}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Actions */}
           <div className="flex justify-end gap-4 pt-6 border-t border-border/50">
-            <Button variant="outline" onClick={onClose} disabled={uploading} className="px-8 py-3 rounded-xl font-medium">
-              Cancel
+            <Button 
+              variant="outline" 
+              onClick={onClose} 
+              disabled={isUploading} 
+              className="px-8 py-3 rounded-xl font-medium"
+            >
+              {isUploading ? 'Please Wait...' : 'Cancel'}
             </Button>
             <Button 
               onClick={handleUpload} 
-              disabled={selectedFiles.length === 0 || uploading}
+              disabled={!canUpload}
               className="bg-gradient-primary hover:shadow-glow-primary px-8 py-3 rounded-xl font-medium"
             >
-              {uploading ? (
+              {isUploading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
                   Uploading...
                 </>
               ) : (
