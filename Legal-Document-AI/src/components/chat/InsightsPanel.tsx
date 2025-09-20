@@ -1,10 +1,17 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Volume2, BarChart3, StickyNote, Download, Play } from "lucide-react";
-import { useGenerateSummary, useGenerateAudio, useGenerateReport, useInsights, useExportConversation } from "@/hooks/api";
+import {
+  useGenerateSummary,
+  useGenerateAudio,
+  useGenerateReport,
+  useInsights,
+  useExportConversation,
+  useDownloadFile,
+} from "@/hooks/api";
 
 interface InsightsPanelProps {
   activeDocument: string | null;
@@ -13,113 +20,87 @@ interface InsightsPanelProps {
   conversationId?: string | null;
 }
 
-export const InsightsPanel = ({ activeDocument, hasDocuments, activeFileId, conversationId }: InsightsPanelProps) => {
+type InsightWire = {
+  summary?: { available?: boolean; url?: string; created_at?: string; word_count?: number };
+  audio?: { available?: boolean; url?: string; created_at?: string; duration?: string };
+  report?: { available?: boolean; url?: string; created_at?: string; page_count?: number };
+  // Flat fallbacks some backends return:
+  summary_available?: boolean;
+  summary_url?: string;
+  audio_available?: boolean;
+  audio_url?: string;
+  report_available?: boolean;
+  report_url?: string;
+  [k: string]: any;
+};
+
+export const InsightsPanel = ({
+  activeDocument,
+  hasDocuments,
+  activeFileId,
+  conversationId,
+}: InsightsPanelProps) => {
   const [userNotes, setUserNotes] = useState("");
 
-  // Use real API hooks
+  // Actions
   const generateSummaryMutation = useGenerateSummary();
   const generateAudioMutation = useGenerateAudio();
   const generateReportMutation = useGenerateReport();
   const exportConversationMutation = useExportConversation();
 
-  // Get insights data
-  const { data: insightsData, refetch: refetchInsights } = useInsights(activeFileId);
+  // Data
+  const { data: insightsResp, refetch: refetchInsights } = useInsights(activeFileId ?? null);
+
+  // Download helper (resolves backend base URL & triggers download)
+  const downloadFile = useDownloadFile();
+
+  // Normalize insights object (works for both nested and flat formats)
+  const insights = (insightsResp?.insights || insightsResp || {}) as InsightWire;
+
+  const summaryAvailable = useMemo(
+    () => Boolean(insights.summary?.available ?? insights.summary_available),
+    [insights]
+  );
+  const audioAvailable = useMemo(
+    () => Boolean(insights.audio?.available ?? insights.audio_available),
+    [insights]
+  );
+  const reportAvailable = useMemo(
+    () => Boolean(insights.report?.available ?? insights.report_available),
+    [insights]
+  );
+
+  const summaryUrl = insights.summary?.url ?? insights.summary_url ?? "";
+  const audioUrl = insights.audio?.url ?? insights.audio_url ?? "";
+  const reportUrl = insights.report?.url ?? insights.report_url ?? "";
 
   const generateSummary = async () => {
     if (!activeFileId) return;
-    try {
-      await generateSummaryMutation.mutateAsync({ fileId: activeFileId });
-      // Refetch insights to get updated data
-      setTimeout(() => refetchInsights(), 1000);
-    } catch (error) {
-      console.error('Generate summary error:', error);
-    }
+    await generateSummaryMutation.mutateAsync({ fileId: activeFileId });
+    setTimeout(() => refetchInsights(), 1000);
   };
 
   const generateAudioOverview = async () => {
     if (!activeFileId) return;
-    try {
-      await generateAudioMutation.mutateAsync({ 
-        fileId: activeFileId,
-        options: {
-          voice_type: "female",
-          language: "en",
-          speed: 1.0
-        }
-      });
-      // Refetch insights to get updated data
-      setTimeout(() => refetchInsights(), 1000);
-    } catch (error) {
-      console.error('Generate audio error:', error);
-    }
+    await generateAudioMutation.mutateAsync({
+      fileId: activeFileId,
+      options: { voice_type: "female", language: "en", speed: 1.0 },
+    });
+    setTimeout(() => refetchInsights(), 1000);
   };
 
   const generateDetailedReport = async () => {
     if (!activeFileId) return;
-    try {
-      await generateReportMutation.mutateAsync({ 
-        fileId: activeFileId,
-        options: {
-          type: "comprehensive",
-          format: "pdf",
-          language: "en"
-        }
-      });
-      // Refetch insights to get updated data
-      setTimeout(() => refetchInsights(), 1000);
-    } catch (error) {
-      console.error('Generate report error:', error);
-    }
+    await generateReportMutation.mutateAsync({
+      fileId: activeFileId,
+      options: { type: "comprehensive", format: "pdf", language: "en" },
+    });
+    setTimeout(() => refetchInsights(), 1000);
   };
 
   const exportAllInsights = async () => {
-    if (!conversationId) {
-      console.warn('No conversation ID available for export');
-      return;
-    }
-    try {
-      await exportConversationMutation.mutateAsync({ 
-        conversationId,
-        format: "pdf"
-      });
-    } catch (error) {
-      console.error('Export conversation error:', error);
-    }
-  };
-
-  // Get insights status - handle both nested and flat response structures
-  type InsightType = {
-    summary?: { available?: boolean; url?: string; created_at?: string };
-    summary_available?: boolean;
-    summary_url?: string;
-    audio?: { available?: boolean; url?: string; created_at?: string; duration?: string };
-    audio_available?: boolean;
-    audio_url?: string;
-    report?: { available?: boolean; url?: string; created_at?: string; page_count?: number };
-    report_available?: boolean;
-    report_url?: string;
-    [key: string]: any;
-  };
-  const insights: InsightType = (insightsData?.insights || insightsData || {}) as InsightType;
-  const summaryAvailable = (insights.summary?.available ?? insights.summary_available) || false;
-  const audioAvailable = (insights.audio?.available ?? insights.audio_available) || false;
-  const reportAvailable = (insights.report?.available ?? insights.report_available) || false;
-
-  // Handle download URLs
-  const handleDownload = (url: string, filename: string) => {
-    if (!url) {
-      console.error('No download URL available');
-      return;
-    }
-    
-    // Create download link
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (!conversationId) return;
+    await exportConversationMutation.mutateAsync({ conversationId, format: "pdf" });
   };
 
   return (
@@ -137,11 +118,8 @@ export const InsightsPanel = ({ activeDocument, hasDocuments, activeFileId, conv
           background: rgba(255,255,255,0.02);
           transition: all 0.25s ease;
         }
-        .ins-card:hover {
-          transform: translateY(-4px);
-        }
+        .ins-card:hover { transform: translateY(-4px); }
 
-        /* Accent Themes */
         .accent-green { color: #34d399; }
         .accent-purple { color: #818cf8; }
         .accent-red { color: #f87171; }
@@ -153,10 +131,8 @@ export const InsightsPanel = ({ activeDocument, hasDocuments, activeFileId, conv
           color: #34d399;
         }
         .btn-green:hover { background: rgba(52,211,153,0.18); }
-        .btn-green:disabled { 
-          opacity: 0.5; 
-          cursor: not-allowed; 
-          background: rgba(52,211,153,0.06);
+        .btn-green:disabled {
+          opacity: 0.5; cursor: not-allowed; background: rgba(52,211,153,0.06);
         }
 
         .btn-purple {
@@ -165,10 +141,8 @@ export const InsightsPanel = ({ activeDocument, hasDocuments, activeFileId, conv
           color: #818cf8;
         }
         .btn-purple:hover { background: rgba(129,140,248,0.18); }
-        .btn-purple:disabled { 
-          opacity: 0.5; 
-          cursor: not-allowed; 
-          background: rgba(129,140,248,0.06);
+        .btn-purple:disabled {
+          opacity: 0.5; cursor: not-allowed; background: rgba(129,140,248,0.06);
         }
 
         .btn-red {
@@ -177,10 +151,8 @@ export const InsightsPanel = ({ activeDocument, hasDocuments, activeFileId, conv
           color: #f87171;
         }
         .btn-red:hover { background: rgba(248,113,113,0.18); }
-        .btn-red:disabled { 
-          opacity: 0.5; 
-          cursor: not-allowed; 
-          background: rgba(248,113,113,0.06);
+        .btn-red:disabled {
+          opacity: 0.5; cursor: not-allowed; background: rgba(248,113,113,0.06);
         }
 
         .btn-amber {
@@ -226,7 +198,7 @@ export const InsightsPanel = ({ activeDocument, hasDocuments, activeFileId, conv
                   <p className="text-xs text-gray-400">Get a concise overview</p>
                 </div>
               </div>
-              
+
               {summaryAvailable ? (
                 <div className="space-y-2">
                   <Badge variant="secondary" className="text-xs w-full justify-center">
@@ -234,13 +206,13 @@ export const InsightsPanel = ({ activeDocument, hasDocuments, activeFileId, conv
                   </Badge>
                   <Button
                     onClick={() => {
-                      const url = insights.summary?.url || insights.summary_url;
-                      const filename = `summary_${activeFileId || 'document'}.pdf`;
-                      handleDownload(url, filename);
+                      if (!summaryUrl) return;
+                      const filename = `summary_${activeFileId || "document"}.txt`; // backend serves text/plain
+                      downloadFile(summaryUrl, filename);
                     }}
                     className="w-full btn-success"
                     size="sm"
-                    disabled={!insights.summary?.url && !insights.summary_url}
+                    disabled={!summaryUrl}
                   >
                     <Download className="h-3 w-3 mr-2" />
                     Download Summary
@@ -267,7 +239,7 @@ export const InsightsPanel = ({ activeDocument, hasDocuments, activeFileId, conv
                   <p className="text-xs text-gray-400">Listen to the summary</p>
                 </div>
               </div>
-              
+
               {audioAvailable ? (
                 <div className="space-y-2">
                   <Badge variant="secondary" className="text-xs w-full justify-center">
@@ -275,16 +247,16 @@ export const InsightsPanel = ({ activeDocument, hasDocuments, activeFileId, conv
                   </Badge>
                   <Button
                     onClick={() => {
-                      const url = insights.audio?.url || insights.audio_url;
-                      const filename = `audio_${activeFileId || 'document'}.mp3`;
-                      handleDownload(url, filename);
+                      if (!audioUrl) return;
+                      const filename = `audio_${activeFileId || "document"}.mp3`;
+                      downloadFile(audioUrl, filename);
                     }}
                     className="w-full btn-success"
                     size="sm"
-                    disabled={!insights.audio?.url && !insights.audio_url}
+                    disabled={!audioUrl}
                   >
                     <Play className="h-3 w-3 mr-2" />
-                    Play Audio {insights.audio?.duration ? `(${insights.audio.duration})` : ''}
+                    Play Audio {insights.audio?.duration ? `(${insights.audio.duration})` : ""}
                   </Button>
                 </div>
               ) : (
@@ -308,21 +280,21 @@ export const InsightsPanel = ({ activeDocument, hasDocuments, activeFileId, conv
                   <p className="text-xs text-gray-400">Detailed analysis with graphs</p>
                 </div>
               </div>
-              
+
               {reportAvailable ? (
                 <div className="space-y-2">
                   <Badge variant="secondary" className="text-xs w-full justify-center">
-                    Report Available {insights.report?.page_count ? `(${insights.report.page_count} pages)` : ''}
+                    Report Available {insights.report?.page_count ? `(${insights.report.page_count} pages)` : ""}
                   </Badge>
                   <Button
                     onClick={() => {
-                      const url = insights.report?.url || insights.report_url;
-                      const filename = `report_${activeFileId || 'document'}.pdf`;
-                      handleDownload(url, filename);
+                      if (!reportUrl) return;
+                      const filename = `report_${activeFileId || "document"}.pdf`;
+                      downloadFile(reportUrl, filename);
                     }}
                     className="w-full btn-success"
                     size="sm"
-                    disabled={!insights.report?.url && !insights.report_url}
+                    disabled={!reportUrl}
                   >
                     <Download className="h-3 w-3 mr-2" />
                     Download Report
@@ -368,25 +340,40 @@ export const InsightsPanel = ({ activeDocument, hasDocuments, activeFileId, conv
               <div className="space-y-2 text-xs">
                 {summaryAvailable && (
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">Summary</Badge>
+                    <Badge variant="secondary" className="text-xs">
+                      Summary
+                    </Badge>
                     <span className="text-gray-400">
-                      Generated {insights.summary?.created_at ? new Date(insights.summary.created_at).toLocaleString() : 'recently'}
+                      Generated{" "}
+                      {insights.summary?.created_at
+                        ? new Date(insights.summary.created_at).toLocaleString()
+                        : "recently"}
                     </span>
                   </div>
                 )}
                 {audioAvailable && (
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">Audio</Badge>
+                    <Badge variant="outline" className="text-xs">
+                      Audio
+                    </Badge>
                     <span className="text-gray-400">
-                      Generated {insights.audio?.created_at ? new Date(insights.audio.created_at).toLocaleString() : 'recently'}
+                      Generated{" "}
+                      {insights.audio?.created_at
+                        ? new Date(insights.audio.created_at).toLocaleString()
+                        : "recently"}
                     </span>
                   </div>
                 )}
                 {reportAvailable && (
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">Report</Badge>
+                    <Badge variant="outline" className="text-xs">
+                      Report
+                    </Badge>
                     <span className="text-gray-400">
-                      Generated {insights.report?.created_at ? new Date(insights.report.created_at).toLocaleString() : 'recently'}
+                      Generated{" "}
+                      {insights.report?.created_at
+                        ? new Date(insights.report.created_at).toLocaleString()
+                        : "recently"}
                     </span>
                   </div>
                 )}
@@ -399,18 +386,20 @@ export const InsightsPanel = ({ activeDocument, hasDocuments, activeFileId, conv
 
           {/* Footer */}
           <div className="p-4 border-t border-[rgba(255,255,255,0.08)]">
-            <Button 
+            <Button
               onClick={exportAllInsights}
               disabled={exportConversationMutation.isPending || !conversationId}
-              variant="outline" 
-              size="sm" 
+              variant="outline"
+              size="sm"
               className="w-full border-gray-600 text-gray-300 hover:bg-gray-800"
             >
-              <Download className="h-3 w-3 mr-2" /> 
+              <Download className="h-3 w-3 mr-2" />
               {exportConversationMutation.isPending ? "Exporting..." : "Export All Insights"}
             </Button>
             {!conversationId && (
-              <p className="text-xs text-gray-500 mt-2 text-center">Start a conversation to enable export</p>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                Start a conversation to enable export
+              </p>
             )}
           </div>
         </>
