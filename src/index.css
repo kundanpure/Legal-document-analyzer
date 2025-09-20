@@ -1,0 +1,314 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* LegalAI Design System - Light theme with clean Google Sans typography */
+@layer base {
+  :root {
+    /* Core Dark Theme */
+    --background: 220 15% 6%;          /* Deep black/charcoal */
+    --foreground: 210 20% 95%;         /* Light text */
+
+    --card: 220 15% 8%;                /* Dark cards */
+    --card-foreground: 210 20% 95%;    /* Light card text */
+
+    --popover: 220 15% 8%;
+    --popover-foreground: 210 20% 95%;
+
+    /* Gradient Accent System */
+    --primary: 250 84% 64%;            /* Bright purple */
+    --primary-foreground: 0 0% 0%;
+    --primary-glow: 250 90% 75%;       /* Glowing purple */
+    
+    --secondary: 220 13% 12%;          /* Dark gray */
+    --secondary-foreground: 210 20% 85%;
+    
+    --accent: 210 100% 65%;            /* Bright blue */
+    --accent-foreground: 0 0% 0%;
+    --accent-glow: 210 100% 75%;       /* Glowing blue */
+
+    /* Interactive States */
+    --muted: 220 13% 10%;
+    --muted-foreground: 210 15% 60%;
+    
+    --border: 220 13% 15%;             /* Dark borders */
+    --input: 220 13% 12%;
+    --ring: 250 84% 64%;
+
+    /* Status Colors */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 20% 98%;
+
+    --radius: 24px;                    /* Larger radius for modern feel */
+
+    /* Custom Design Tokens */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+    --gradient-hero: linear-gradient(180deg, hsl(220 15% 6%) 0%, hsl(220 15% 4%) 100%);
+    --gradient-glass: linear-gradient(135deg, hsl(var(--primary) / 0.1), hsl(var(--accent) / 0.05));
+    --glow-primary: 0 0 60px hsl(var(--primary-glow) / 0.3);
+    --glow-accent: 0 0 40px hsl(var(--accent-glow) / 0.2);
+    --shadow-elegant: 0 8px 32px -8px hsl(var(--primary) / 0.3);
+    --shadow-glass: 0 8px 32px -8px hsl(0 0% 0% / 0.4);
+    --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    --backdrop-blur: blur(20px);
+
+    /* Typography Scale */
+    --font-sans: 'Google Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --letter-spacing-tight: -0.025em;
+    --letter-spacing-normal: 0em;
+  }
+
+  .dark {
+    /* Optional dark mode override */
+    --background: 222 15% 7%;
+    --foreground: 210 20% 95%;
+    --card: 222 15% 9%;
+    --card-foreground: 210 20% 95%;
+    --popover: 222 15% 8%;
+    --popover-foreground: 210 20% 95%;
+    --primary: 250 84% 54%;
+    --primary-foreground: 210 20% 98%;
+    --secondary: 220 13% 15%;
+    --secondary-foreground: 210 20% 85%;
+    --accent: 210 100% 56%;
+    --accent-foreground: 210 20% 98%;
+    --muted: 220 13% 12%;
+    --muted-foreground: 210 15% 65%;
+    --border: 220 13% 18%;
+    --input: 220 13% 15%;
+    --ring: 250 84% 54%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 20% 98%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings: "kern" 1, "liga" 1;
+    font-family: var(--font-sans);
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Typography Classes */
+  .heading-sans {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    letter-spacing: var(--letter-spacing-tight);
+  }
+
+  .body-sans {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    letter-spacing: var(--letter-spacing-normal);
+  }
+
+  /* Scroll-triggered animations */
+  .scroll-reveal {
+    opacity: 0;
+    transform: translateY(40px);
+    transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .scroll-reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .parallax-bg {
+    will-change: transform;
+  }
+}
+
+/* Animation System */
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.6s ease-out forwards;
+  }
+  
+  .animate-fade-in-up {
+    animation: fadeInUp 0.8s ease-out forwards;
+  }
+  
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  /* Parallax utility */
+  .parallax-slow {
+    transform: translateZ(0);
+    will-change: transform;
+  }
+
+  /* Gradient utilities */
+  .bg-gradient-primary {
+    background: var(--gradient-primary);
+  }
+
+  .bg-gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  .bg-gradient-glass {
+    background: var(--gradient-glass);
+  }
+
+  /* Glow utilities */
+  .shadow-glow-primary {
+    box-shadow: var(--glow-primary);
+  }
+
+  .shadow-glow-accent {
+    box-shadow: var(--glow-accent);
+  }
+
+  .shadow-elegant {
+    box-shadow: var(--shadow-elegant);
+  }
+
+  .shadow-glass {
+    box-shadow: var(--shadow-glass);
+  }
+
+  /* Liquid Glass Effect */
+  .glass-button {
+    background: var(--gradient-glass);
+    backdrop-filter: var(--backdrop-blur);
+    border: 1px solid hsl(var(--border) / 0.2);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .glass-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.1), transparent);
+    transition: left 0.6s ease;
+  }
+
+  .glass-button:hover::before {
+    left: 100%;
+  }
+
+  .glass-button:hover {
+    box-shadow: var(--glow-primary), var(--shadow-glass);
+    border-color: hsl(var(--primary) / 0.3);
+  }
+
+  /* Floating particles */
+  .particle {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle, hsl(var(--primary) / 0.1), transparent);
+    pointer-events: none;
+    animation: float-particle 8s ease-in-out infinite;
+  }
+
+  .particle:nth-child(2) { animation-delay: -2s; }
+  .particle:nth-child(3) { animation-delay: -4s; }
+  .particle:nth-child(4) { animation-delay: -6s; }
+
+  /* Transition utility */
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+}
+
+/* Keyframe Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glow {
+  from {
+    box-shadow: var(--glow-primary);
+  }
+  to {
+    box-shadow: var(--glow-accent);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes float-particle {
+  0%, 100% {
+    transform: translateY(0px) translateX(0px) scale(1);
+    opacity: 0.3;
+  }
+  25% {
+    transform: translateY(-20px) translateX(10px) scale(1.1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-40px) translateX(-5px) scale(0.9);
+    opacity: 0.8;
+  }
+  75% {
+    transform: translateY(-20px) translateX(-15px) scale(1.2);
+    opacity: 0.4;
+  }
+}
+
+/* Scroll-based animations */
+@media (prefers-reduced-motion: no-preference) {
+  .parallax-element {
+    transform: translateY(calc(var(--scroll-y, 0) * var(--parallax-speed, 0.5)));
+  }
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--accent));
+}
