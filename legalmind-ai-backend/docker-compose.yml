@@ -1,0 +1,7 @@
+services:
+  legalmind-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
