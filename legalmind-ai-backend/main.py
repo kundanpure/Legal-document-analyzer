@@ -206,11 +206,18 @@ app = FastAPI(
 # Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://localhost:8080","https://nimble-kringle-55eacc.netlify.app"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "https://nimble-kringle-55eacc.netlify.app",
+        "https://legal-ai-xi.vercel.app",   # <-- add this
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 try:
     app.mount("/static", StaticFiles(directory="uploads"), name="static")
