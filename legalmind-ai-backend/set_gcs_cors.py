@@ -5,7 +5,7 @@ from google.oauth2 import service_account
 
 BUCKET = os.getenv("GCS_BUCKET_NAME") or "docanalyzer-470219-storage"
 ORIGINS = [
-  "http://localhost:5173",
+  "http://localhost:5174",
   "http://localhost:3000",
   "http://localhost:8080",
   "https://nimble-kringle-55eacc.netlify.app",
