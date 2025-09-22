@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowRight, Upload, Brain, Shield, Star, Lock, Eye, Database, Users } from "lucide-react";
+import { ArrowRight, Upload, Brain, Shield, Star, Lock, Eye, Database, Users, Menu, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const VideoPlayer = ({ src }: { src: string }) => {
@@ -60,12 +60,12 @@ const FloatingElement = ({ delay = 0, duration = 4, size = 80, blur = 20, opacit
 
 const LandingPage = () => {
   const [scrollY] = useState(0);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const testimonialsRef = useRef<HTMLDivElement | null>(null);
   const testimonialsObserverRef = useRef<IntersectionObserver | null>(null);
   const rafRef = useRef<number | null>(null);
   const scrollPosRef = useRef(0);
   const navigate = useNavigate();
-
 
   useEffect(() => {
     const els = document.querySelectorAll(".scroll-reveal");
@@ -114,6 +114,29 @@ const LandingPage = () => {
     };
   }, []);
 
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (isMobileMenuOpen && !(event.target as Element)?.closest('.mobile-menu, .mobile-menu-button')) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, [isMobileMenuOpen]);
+
+  // Prevent scroll when mobile menu is open
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isMobileMenuOpen]);
+
   const features = [
     {
       icon: Upload,
@@ -159,7 +182,7 @@ const LandingPage = () => {
         :root { --muted: #9aa3ad; --glass-border: rgba(255,255,255,0.06); --fg: #eef2f6; }
         * { box-sizing: border-box; }
         body,html,#root { background: #000; }
-        nav { position:fixed; top:0; width:100%; z-index:60; backdrop-filter: blur(8px); background: rgba(0,0,0,0.6); border-bottom: 1px solid rgba(255,255,255,0.04); }
+        nav { position:fixed; top:0; width:100%; z-index:80; backdrop-filter: blur(8px); background: rgba(0,0,0,0.6); border-bottom: 1px solid rgba(255,255,255,0.04); }
         .container { max-width:1200px; margin:0 auto; padding:0 1.5rem; }
         .hero { padding-top:92px; padding-bottom:36px; display:flex; align-items:center; justify-content:center; min-height:520px; text-align:center; }
         .headline { margin:0; line-height:1.02; font-weight:300; }
@@ -177,6 +200,87 @@ const LandingPage = () => {
         .feature .icon-wrap { width:84px; height:84px; border-radius:18px; display:grid; place-items:center; background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.04); margin-bottom:18px; }
         .card-preview { border-radius:16px; border:1px solid rgba(255,255,255,0.06); overflow:hidden; background: #06060a; }
         .compact { padding:18px; }
+
+        /* Mobile Navigation Styles */
+        .mobile-menu-button { 
+          display: none; 
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 8px;
+          padding: 10px;
+          transition: all 0.2s ease;
+          cursor: pointer;
+          position: relative;
+          z-index: 90;
+          min-width: 44px;
+          min-height: 44px;
+        }
+        .mobile-menu-button:hover {
+          background: rgba(255,255,255,0.08);
+          transform: scale(1.05);
+        }
+        .mobile-menu-button:active {
+          transform: scale(0.95);
+        }
+        .mobile-menu { 
+          position: fixed; 
+          top: 0; 
+          right: -100%; 
+          height: 100vh; 
+          width: 280px; 
+          background: rgba(0,0,0,0.95); 
+          backdrop-filter: blur(20px); 
+          border-left: 1px solid rgba(255,255,255,0.1);
+          transition: right 0.3s ease;
+          z-index: 85;
+          padding: 80px 32px 32px 32px;
+        }
+        .mobile-menu.open { right: 0; }
+        .mobile-menu-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background: rgba(0,0,0,0.5);
+          z-index: 75;
+          opacity: 0;
+          visibility: hidden;
+          transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .mobile-menu-overlay.open { opacity: 1; visibility: visible; }
+        .mobile-nav-item {
+          display: block;
+          color: var(--fg);
+          padding: 16px 0;
+          font-size: 18px;
+          border-bottom: 1px solid rgba(255,255,255,0.05);
+          cursor: pointer;
+          transition: color 0.2s ease;
+        }
+        .mobile-nav-item:hover { color: #ffd37b; }
+        .mobile-nav-item:last-child { border-bottom: none; }
+        .mobile-menu-close {
+          position: absolute;
+          top: 20px;
+          right: 20px;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 8px;
+          color: var(--fg);
+          cursor: pointer;
+          padding: 8px;
+          transition: all 0.2s ease;
+          z-index: 90;
+          min-width: 40px;
+          min-height: 40px;
+        }
+        .mobile-menu-close:hover {
+          background: rgba(255,255,255,0.1);
+        }
+        .mobile-menu-close:active {
+          transform: scale(0.95);
+        }
         
         /* Modern Privacy Section */
         .privacy-section { 
@@ -355,20 +459,69 @@ const LandingPage = () => {
         @keyframes float-6s { 0% { transform: translateY(0px) rotate(0deg); } 100% { transform: translateY(-30px) rotate(-90deg); } }
         @keyframes float-8s { 0% { transform: translateY(0px) rotate(0deg); } 100% { transform: translateY(-15px) rotate(270deg); } }
 
-        @media (max-width:900px){ 
-          .line-2{ font-size:2.6rem } 
-          .line-1,.line-3{ font-size:1.8rem } 
-          .feature{ flex-direction:column-reverse; padding:28px 0 }
+        /* Responsive Breakpoints */
+        @media (max-width: 1024px) {
+          .privacy-grid { gap: 40px; }
+          .privacy-visual { height: 350px; }
+          .feature { gap: 28px; }
+          .feature .container { align-items: center; }
+        }
+
+        @media (max-width: 900px) { 
+          .line-2 { font-size: 2.6rem; } 
+          .line-1, .line-3 { font-size: 1.8rem; } 
+          
+          /* Fix feature sections for mobile */
+          .feature { 
+            flex-direction: column; 
+            padding: 40px 0; 
+            text-align: center; 
+          }
+          .feature .container { 
+            grid-template-columns: 1fr !important; 
+            gap: 32px !important; 
+            max-width: 100%;
+          }
+          .feature .left { 
+            max-width: 100%; 
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+          }
+          .feature .icon-wrap { 
+            margin: 0 auto 18px auto; 
+          }
+          .feature h3 { 
+            text-align: center; 
+          }
+          .feature p {
+            text-align: center;
+            max-width: 500px;
+          }
+          .feature .star-row {
+            justify-content: center;
+            text-align: center;
+          }
+          
           .privacy-grid { grid-template-columns: 1fr; gap: 40px; text-align: center; }
           .privacy-visual { height: 300px; }
           .privacy-section { padding: 60px 0; }
           .testimonials-section { padding: 60px 0; }
-          .testimonial-card{ flex:0 0 300px }
+          .testimonial-card { flex: 0 0 300px; }
           .container { padding: 0 1rem; }
           .hero { padding-top: 80px; padding-bottom: 24px; min-height: 400px; }
+          
+          /* Show mobile menu button and hide desktop nav */
+          .mobile-menu-button { 
+            display: flex; 
+            align-items: center;
+            justify-content: center;
+          }
+          .desktop-nav { display: none !important; }
         }
         
-        @media (max-width:768px){
+        @media (max-width: 768px) {
           .line-1, .line-3 { font-size: 1.6rem; }
           .line-2 { font-size: 2.2rem; }
           .privacy-content h2 { font-size: 28px; }
@@ -376,11 +529,44 @@ const LandingPage = () => {
           .privacy-features { gap: 16px; }
           .privacy-feature { padding: 16px; }
           .testimonial-card { flex: 0 0 280px; padding: 24px; }
-          .feature .left { text-align: center; }
-          .feature .container { grid-template-columns: 1fr !important; }
+          
+          /* Better mobile feature styling */
+          .feature { padding: 32px 0; }
+          .feature .container { gap: 24px; }
+          .feature .icon-wrap { 
+            width: 64px; 
+            height: 64px; 
+            margin: 0 auto 16px auto;
+          }
+          .feature .icon-wrap svg { width: 28px; height: 28px; }
+          .feature h3 { 
+            font-size: 24px; 
+            text-align: center;
+            margin: 0 auto;
+          }
+          .feature p {
+            text-align: center;
+            margin: 12px auto 0 auto;
+            max-width: 400px;
+          }
+          .feature .star-row {
+            margin-top: 14px;
+            justify-content: center;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+          }
+          
+          .privacy-ring:nth-child(1) { width: 180px; height: 180px; }
+          .privacy-ring:nth-child(2) { width: 240px; height: 240px; }
+          .privacy-ring:nth-child(3) { width: 300px; height: 300px; }
+          .privacy-center { width: 100px; height: 100px; }
+          
+          /* Mobile navbar improvements */
+          nav .container { padding: 0.75rem 1rem; }
         }
         
-        @media (max-width:480px){
+        @media (max-width: 480px) {
           .line-1, .line-3 { font-size: 1.4rem; }
           .line-2 { font-size: 1.8rem; }
           .privacy-content h2 { font-size: 24px; }
@@ -392,44 +578,208 @@ const LandingPage = () => {
           .privacy-ring:nth-child(2) { width: 200px; height: 200px; }
           .privacy-ring:nth-child(3) { width: 250px; height: 250px; }
           .privacy-center { width: 80px; height: 80px; }
-          .nav { padding: 0.5rem 0; }
+          .container { padding: 0 0.75rem; }
+          .hero { min-height: 350px; }
+          .sub { font-size: 0.95rem; }
+          .liquid-btn { padding: 14px 28px; font-size: 14px; }
+          
+          /* Ultra mobile feature fixes */
+          .feature { padding: 24px 0; }
+          .feature .container { gap: 20px; }
+          .feature h3 { 
+            font-size: 20px; 
+            line-height: 1.3;
+          }
+          .feature p {
+            font-size: 14px;
+            line-height: 1.5;
+            max-width: 320px;
+          }
+          .feature .star-row span {
+            font-size: 13px;
+          }
+          .feature .icon-wrap { 
+            width: 56px; 
+            height: 56px; 
+          }
+          .feature .icon-wrap svg { 
+            width: 24px; 
+            height: 24px; 
+          }
+          
+          /* Mobile navbar */
+          nav .container { padding: 0.5rem 0.75rem; }
+          .mobile-menu { width: 260px; padding: 70px 24px 24px 24px; }
+        }
+        
+        @media (max-width: 320px) {
+          .line-1, .line-3 { font-size: 1.2rem; }
+          .line-2 { font-size: 1.6rem; }
+          .container { padding: 0 0.5rem; }
+          .privacy-content h2 { font-size: 20px; }
+          .testimonials-header h2 { font-size: 20px; }
+          .testimonial-card { flex: 0 0 240px; padding: 16px; }
+          .mobile-menu { width: 240px; }
         }
       `}</style>
+
+      {/* Mobile Menu Overlay */}
+      <div 
+        className={`mobile-menu-overlay ${isMobileMenuOpen ? 'open' : ''}`}
+        onClick={() => setIsMobileMenuOpen(false)}
+      />
 
       <nav>
         <div className="container" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 0" }}>
           <div style={{ fontSize: 18, fontWeight: 600 }}>LegalAI</div>
-          <div style={{ display: "flex", gap: 24, alignItems: "center", color: "var(--muted)" }} className="hidden md:flex">
+          
+          {/* Desktop Navigation */}
+          <div className="desktop-nav" style={{ display: "flex", gap: 24, alignItems: "center", color: "var(--muted)" }}>
             <span style={{ cursor: "pointer" }}>Overview</span>
             <span style={{ cursor: "pointer" }}>Features</span>
             <span style={{ cursor: "pointer" }}>Contact</span>
           </div>
+
+          {/* Mobile Menu Button */}
+          <button 
+            className="mobile-menu-button"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label="Toggle mobile menu"
+          >
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
         </div>
       </nav>
 
+      {/* Mobile Navigation Menu */}
+      <div className={`mobile-menu ${isMobileMenuOpen ? 'open' : ''}`}>
+        <button 
+          className="mobile-menu-close"
+          onClick={() => setIsMobileMenuOpen(false)}
+          aria-label="Close mobile menu"
+        >
+          <X size={24} />
+        </button>
+        <div className="mobile-nav-item" onClick={() => setIsMobileMenuOpen(false)}>Overview</div>
+        <div className="mobile-nav-item" onClick={() => setIsMobileMenuOpen(false)}>Features</div>
+        <div className="mobile-nav-item" onClick={() => setIsMobileMenuOpen(false)}>Contact</div>
+      </div>
+
       <header className="hero">
-        <div className="container">
-          <h1 className="headline" aria-hidden>
-            <span className="line-1">Simplify Complex</span>
-            <span className="line-2">Legal Documents</span>
-            <span className="line-3">With <span style={{ position: "relative", display: "inline-block" }}>AI
-              <svg className="ai-underline" viewBox="0 0 200 40" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                <path d="M5 28 C40 5, 120 35, 195 20" fill="none" stroke="#ffd37b" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" opacity="0.95"/>
-                <path d="M5 30 C40 10, 120 37, 195 22" fill="none" stroke="#f8fafc" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.18"/>
-              </svg>
-            </span></span>
-          </h1>
+  <style>{`
+    /* --- Keep desktop untouched --- */
 
-          <p className="sub">AI that helps you analyze, summarize, and reason with your legal PDFs — fast, private, and reliable.</p>
+    .ai-text {
+      position: relative;
+      display: inline-block;
+      white-space: nowrap;
+      line-height: 1;
+      padding-bottom: 0.08em;
+    }
 
-          <div style={{ marginTop: 24 }}>
-            <button className="liquid-btn" onClick={() => navigate("/chat")} aria-label="Try Now">
-              <span style={{ position: "relative", zIndex: 10, display: "inline-flex", alignItems: "center", gap: 8 }}>Try Now <ArrowRight /></span>
-              <span className="liquid-shine" />
-            </button>
-          </div>
-        </div>
-      </header>
+    .ai-text .ai-underline {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: -0.22em;
+      height: 0.45em;
+      pointer-events: none;
+      display: block;
+      --ai-underline-width: 1.4em;
+      width: var(--ai-underline-width);
+    }
+
+    @media (max-width: 380px) {
+      .ai-text .ai-underline {
+        --ai-underline-width: 1.2em;
+        bottom: -0.26em;
+        height: 0.5em;
+      }
+    }
+
+    /* --- Mobile font & spacing adjustments --- */
+    @media (max-width: 768px) {
+      .headline .line-1 {
+        font-size: 1.6rem !important;
+      }
+      .headline .line-2 {
+        font-size: 2.6rem !important;
+        font-weight: 700 !important;
+      }
+      .headline .line-3 {
+        font-size: 1.8rem !important;
+        font-weight: 700 !important;
+      }
+
+      .ai-text .ai-underline {
+        --ai-underline-width: 1.3em;
+      }
+
+      .sub {
+        font-size: 1rem !important;
+      }
+
+      /* 🔥 Add padding so it doesn’t overlap with navbar */
+      .hero {
+        padding-top: 80px;
+        padding-bottom: 36px;
+      }
+    }
+  `}</style>
+
+  <div className="container">
+    <h1 className="headline" aria-hidden>
+      <span className="line-1">Simplify Complex</span>
+      <span className="line-2">Legal Documents</span>
+      <span className="line-3">
+        With{" "}
+        <span className="ai-text" style={{ position: "relative", display: "inline-block" }}>
+          AI
+          <svg
+            className="ai-underline"
+            viewBox="0 0 200 40"
+            preserveAspectRatio="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden
+          >
+            <path
+              d="M5 28 C40 5, 120 35, 195 20"
+              fill="none"
+              stroke="#ffd37b"
+              strokeWidth="6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity="0.95"
+            />
+            <path
+              d="M5 30 C40 10, 120 37, 195 22"
+              fill="none"
+              stroke="#f8fafc"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity="0.18"
+            />
+          </svg>
+        </span>
+      </span>
+    </h1>
+
+    <p className="sub">
+      AI that helps you analyze, summarize, and reason with your legal PDFs — fast, private, and reliable.
+    </p>
+
+    <div style={{ marginTop: 24 }}>
+      <button className="liquid-btn" onClick={() => navigate("/chat")} aria-label="Try Now">
+        <span style={{ position: "relative", zIndex: 10, display: "inline-flex", alignItems: "center", gap: 8 }}>
+          Try Now <ArrowRight />
+        </span>
+        <span className="liquid-shine" />
+      </button>
+    </div>
+  </div>
+</header>
+
 
       <main className="sections">
         {features.map((feature, i) => (
@@ -439,7 +789,7 @@ const LandingPage = () => {
                 <div className="icon-wrap"><feature.icon style={{ width: 36, height: 36, color: "#fff" }} /></div>
                 <h3 style={{ fontSize: 32, margin: 0, color: "#eef2f6", fontWeight: 300 }}>{feature.title}</h3>
                 <p style={{ color: "var(--muted)", marginTop: 12 }}>{feature.description}</p>
-                <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 14, color: "var(--muted)" }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 14, color: "var(--muted)" }} className="star-row">
                   <Star style={{ width: 16, height: 16, color: "#cde7ff" }} />
                   <span>Powered by advanced AI technology</span>
                 </div>

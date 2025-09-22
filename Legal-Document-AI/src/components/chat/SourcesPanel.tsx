@@ -41,8 +41,10 @@ export const SourcesPanel = ({
   onAddMore,
 }: SourcesPanelProps) => {
   return (
+    // MODIFICATION: Replaced 'flex-1' with 'h-full'
+    // This forces the panel to take the height of its 'h-full' parent in ChatPage.
     <div
-      className="w-80 flex flex-col h-full text-gray-100 border-r"
+      className="flex flex-col h-full min-h-0 text-gray-100 border-r md:w-80 lg:w-96 w-full"
       style={{
         background: "linear-gradient(180deg,#000,#050505)",
         borderColor: "rgba(255,255,255,0.08)",
@@ -67,11 +69,16 @@ export const SourcesPanel = ({
           border-radius: 999px;
           border: 2px solid rgba(0,0,0,0.6);
         }
+        .sources-header { flex-shrink:0; }
+        .sources-footer { flex-shrink:0; }
+        @media (max-width: 768px) {
+          .src-card { margin: 0 !important; }
+          .sources-header { text-align: center; }
+        }
       `}</style>
 
-      {/* Header */}
-      <div className="p-6 border-b border-[rgba(255,255,255,0.08)] src-card m-2">
-        {/* Go Back Button */}
+      {/* Fixed Header */}
+      <div className="p-4 border-b border-[rgba(255,255,255,0.08)] src-card sources-header">
         <Button
           onClick={() => (window.location.href = "/")}
           variant="ghost"
@@ -117,7 +124,7 @@ export const SourcesPanel = ({
         </Button>
       </div>
 
-      {/* Files List */}
+      {/* Scrollable File List */}
       <div className="flex-1 overflow-y-auto dark-scrollbar px-2 pb-2">
         {uploadedFiles.length === 0 ? (
           <div className="p-6 text-center text-gray-400 src-card">
@@ -178,8 +185,8 @@ export const SourcesPanel = ({
         )}
       </div>
 
-      {/* Footer Info */}
-      <div className="p-4 border-t border-[rgba(255,255,255,0.08)] src-card m-2">
+      {/* Fixed Footer */}
+      <div className="p-4 border-t border-[rgba(255,255,255,0.08)] src-card sources-footer">
         <p className="text-xs text-gray-500 text-center">
           Supported: Contracts, Loan Agreements,
           <br />
