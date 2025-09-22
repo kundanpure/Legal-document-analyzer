@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Send, Mic, Bot as BotIcon, User, Sidebar, Activity } from "lucide-react";
+import { Send, Mic, Bot, User, Sidebar, Activity } from "lucide-react";
 import { useChat } from "@/hooks/api";
 
 const Spline = lazy(() => import("@splinetool/react-spline"));
@@ -125,112 +125,469 @@ export const ChatSection = ({
   const titleDisplay = activeDocument ? activeDocument.replace(/\.pdf$/i, "") : "Document Analysis";
 
   return (
-    // MODIFICATION: Removed 'mt-16 md:mt-0'
-    // The parent 'main' element in ChatPage already handles the top offset
-    // for the fixed mobile header.
-    <div className="flex flex-col flex-1 min-h-0 bg-gradient-to-b from-black to-[#050506]">
+    <div className="flex flex-col h-full bg-gradient-to-b from-black to-[#050506] font-sans">
       <style>{`
-        .header { padding:12px 16px; display:flex; align-items:center; justify-content:space-between; background: linear-gradient(180deg,#061022,#091526); border-bottom:1px solid rgba(255,255,255,0.06); flex-shrink:0; }
-        .header-left { display:flex; gap:12px; align-items:center; }
-        .title { color:#f3f4f6; font-weight:600; font-size:18px; }
-        .subtitle { color:#9ca3af; font-size:12px; margin-top:4px; }
-        .robot-icon { width:56px; height:56px; border-radius:10px; display:grid; place-items:center; background:#0b1626; border:1px solid rgba(255,255,255,0.08); flex-shrink:0; }
-        .messages { padding:20px; overflow-y:auto; flex:1; min-height:0; -webkit-overflow-scrolling: touch; }
-        .msg-row { display:flex; gap:14px; align-items:flex-start; margin-bottom:12px; }
-        .msg-row.user { flex-direction:row-reverse; }
-        .avatar { width:36px; height:36px; border-radius:999px; display:grid; place-items:center; background:#0c0c0c; border:1px solid rgba(255,255,255,0.06); flex-shrink:0; }
-        .bubble { border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:10px; background:#0b0b0b; max-width:800px; color:#e6e6e6; font-size:14px; word-break:break-word; }
-        .typing-dots { display:flex; gap:6px; align-items:center; }
-        .dot { width:6px; height:6px; background:#cfcfcf; border-radius:999px; opacity:0.3; animation: blink 1s infinite; }
-        .dot:nth-child(2){ animation-delay:0.15s; }
-        .dot:nth-child(3){ animation-delay:0.3s; }
-        @keyframes blink { 0%,100%{opacity:0.3; transform:translateY(0);} 50%{opacity:1; transform:translateY(-4px);} }
-        .sticky-input { flex-shrink:0; display:flex; justify-content:center; padding:12px; background:#000; border-top:1px solid rgba(255,255,255,0.06); }
-        .form-wrap { width:100%; max-width:920px; display:flex; flex-direction:column; gap:6px; margin:0 auto; }
-        .input-row { display:flex; gap:8px; align-items:center; padding:8px 12px; border-radius:999px; background:#111; border:1px solid rgba(255,255,255,0.08); }
-        .input-row input { flex:1; background:transparent; border:0; outline:none; color:#e6e6e6; font-size:13px; padding:6px 0; }
-        .suggest-row { display:flex; gap:10px; overflow-x:auto; padding:4px 2px 0; }
-        .suggest-row::-webkit-scrollbar { height:6px; }
-        .suggest-row::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.12); border-radius:999px; }
-        .suggest-pill { flex:0 0 auto; white-space:nowrap; padding:8px 12px; border-radius:999px; background:#111; border:1px solid rgba(255,255,255,0.06); color:#e6e6e6; font-size:13px; cursor:pointer; }
-        .desktop-toggles { display:inline-flex; gap:8px; align-items:center; }
-        .desktop-toggle-btn { display:flex; gap:8px; align-items:center; padding:8px 10px; border-radius:999px; background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); color:#e6e6e6; font-size:13px; cursor:pointer; }
-        @media (max-width:900px) {
-          .desktop-toggles { display:none; }
-          .suggest-row { display:none; }
+        /* Header Styles */
+        .chat-header { 
+          padding: 16px 20px; 
+          display: flex; 
+          align-items: center; 
+          justify-content: space-between; 
+          background: linear-gradient(180deg, #061022, #091526); 
+          border-bottom: 1px solid rgba(255,255,255,0.06); 
+          flex-shrink: 0; 
+          min-height: 72px;
+        }
+        
+        .header-left { 
+          display: flex; 
+          gap: 16px; 
+          align-items: center; 
+          min-width: 0;
+          flex: 1;
+        }
+        
+        .robot-icon { 
+          width: 48px; 
+          height: 48px; 
+          border-radius: 12px; 
+          display: grid; 
+          place-items: center; 
+          background: #0b1626; 
+          border: 1px solid rgba(255,255,255,0.08); 
+          flex-shrink: 0; 
+        }
+        
+        .title-section {
+          min-width: 0;
+          flex: 1;
+        }
+        
+        .title { 
+          color: #f3f4f6; 
+          font-weight: 600; 
+          font-size: 18px; 
+          margin: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        
+        .subtitle { 
+          color: #9ca3af; 
+          font-size: 13px; 
+          margin-top: 2px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        /* Messages Container */
+        .messages-container { 
+          flex: 1; 
+          overflow-y: auto; 
+          overflow-x: hidden;
+          padding: 24px 20px;
+          min-height: 0;
+          -webkit-overflow-scrolling: touch;
+        }
+        
+        .messages-container::-webkit-scrollbar {
+          width: 6px;
+        }
+        .messages-container::-webkit-scrollbar-track {
+          background: rgba(55, 65, 81, 0.1);
+        }
+        .messages-container::-webkit-scrollbar-thumb {
+          background: rgba(156, 163, 175, 0.3);
+          border-radius: 3px;
+        }
+        .messages-container::-webkit-scrollbar-thumb:hover {
+          background: rgba(156, 163, 175, 0.5);
+        }
+
+        /* Empty State */
+        .empty-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+          gap: 24px;
+          text-align: center;
+          padding: 40px 20px;
+        }
+
+        .spline-container {
+          width: 100%;
+          max-width: 500px;
+          height: 250px;
+          border-radius: 16px;
+          border: 1px solid rgba(255,255,255,0.1);
+          overflow: hidden;
+          background: rgba(11, 11, 11, 0.5);
+        }
+
+        /* Message Styles */
+        .msg-row { 
+          display: flex; 
+          gap: 16px; 
+          align-items: flex-start; 
+          margin-bottom: 20px;
+          max-width: 100%;
+        }
+        
+        .msg-row.user { 
+          flex-direction: row-reverse; 
+        }
+        
+        .avatar { 
+          width: 36px; 
+          height: 36px; 
+          border-radius: 50%; 
+          display: grid; 
+          place-items: center; 
+          background: #0c0c0c; 
+          border: 1px solid rgba(255,255,255,0.06); 
+          flex-shrink: 0; 
+        }
+        
+        .bubble { 
+          border: 1px solid rgba(255,255,255,0.06); 
+          border-radius: 16px; 
+          padding: 16px; 
+          background: #0b0b0b; 
+          max-width: calc(100% - 60px);
+          color: #e6e6e6; 
+          font-size: 14px; 
+          line-height: 1.5;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+        }
+
+        .message-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 8px;
+          gap: 12px;
+        }
+
+        .message-time {
+          font-size: 11px;
+          color: #6b7280;
+          flex-shrink: 0;
+        }
+
+        /* Typing Animation */
+        .typing-dots { 
+          display: flex; 
+          gap: 6px; 
+          align-items: center; 
+          padding: 8px 0;
+        }
+        
+        .dot { 
+          width: 6px; 
+          height: 6px; 
+          background: #9ca3af; 
+          border-radius: 50%; 
+          opacity: 0.3; 
+          animation: blink 1.4s infinite; 
+        }
+        
+        .dot:nth-child(2) { animation-delay: 0.2s; }
+        .dot:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes blink { 
+          0%, 100% { opacity: 0.3; transform: translateY(0); } 
+          50% { opacity: 1; transform: translateY(-2px); } 
+        }
+
+        /* Input Section */
+        .input-section { 
+          flex-shrink: 0; 
+          padding: 20px; 
+          background: #000; 
+          border-top: 1px solid rgba(255,255,255,0.06); 
+        }
+        
+        .input-wrapper { 
+          max-width: 800px; 
+          margin: 0 auto;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        
+        .input-form { 
+          display: flex; 
+          gap: 12px; 
+          align-items: center; 
+          padding: 12px 16px; 
+          border-radius: 24px; 
+          background: #111; 
+          border: 1px solid rgba(255,255,255,0.08); 
+          transition: border-color 0.2s ease;
+        }
+        
+        .input-form:focus-within {
+          border-color: rgba(59, 130, 246, 0.3);
+        }
+        
+        .chat-input { 
+          flex: 1; 
+          background: transparent; 
+          border: 0; 
+          outline: none; 
+          color: #e6e6e6; 
+          font-size: 14px; 
+          padding: 4px 0;
+          font-family: inherit;
+        }
+        
+        .chat-input::placeholder {
+          color: #6b7280;
+        }
+        
+        .input-button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 6px;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          border-radius: 8px;
+          transition: background-color 0.2s ease;
+        }
+        
+        .input-button:hover {
+          background: rgba(255,255,255,0.05);
+        }
+        
+        .input-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        /* Suggestions */
+        .suggestions { 
+          display: flex; 
+          gap: 8px; 
+          overflow-x: auto; 
+          padding: 4px 0;
+          scrollbar-width: thin;
+        }
+        
+        .suggestions::-webkit-scrollbar { 
+          height: 6px; 
+        }
+        
+        .suggestions::-webkit-scrollbar-thumb { 
+          background: rgba(255,255,255,0.12); 
+          border-radius: 3px; 
+        }
+        
+        .suggestion-pill { 
+          flex-shrink: 0; 
+          white-space: nowrap; 
+          padding: 8px 16px; 
+          border-radius: 20px; 
+          background: #111; 
+          border: 1px solid rgba(255,255,255,0.06); 
+          color: #e6e6e6; 
+          font-size: 13px; 
+          cursor: pointer; 
+          transition: all 0.2s ease;
+        }
+        
+        .suggestion-pill:hover {
+          background: #1a1a1a;
+          border-color: rgba(255,255,255,0.12);
+        }
+
+        /* Desktop Toggles */
+        .desktop-toggles { 
+          display: flex; 
+          gap: 8px; 
+          align-items: center; 
+        }
+        
+        .toggle-button { 
+          display: flex; 
+          gap: 8px; 
+          align-items: center; 
+          padding: 8px 12px; 
+          border-radius: 20px; 
+          background: rgba(255,255,255,0.02); 
+          border: 1px solid rgba(255,255,255,0.06); 
+          color: #e6e6e6; 
+          font-size: 13px; 
+          cursor: pointer; 
+          transition: all 0.2s ease;
+          white-space: nowrap;
+        }
+        
+        .toggle-button:hover {
+          background: rgba(255,255,255,0.05);
+          border-color: rgba(255,255,255,0.12);
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 900px) {
+          .desktop-toggles { 
+            display: none; 
+          }
+          
+          .suggestions { 
+            display: none; 
+          }
+          
+          .chat-header {
+            padding: 12px 16px;
+            min-height: 64px;
+          }
+          
+          .header-left {
+            gap: 12px;
+          }
+          
+          .robot-icon {
+            width: 40px;
+            height: 40px;
+          }
+          
+          .title {
+            font-size: 16px;
+          }
+          
+          .subtitle {
+            font-size: 12px;
+          }
+          
+          .messages-container {
+            padding: 16px 16px;
+          }
+          
+          .input-section {
+            padding: 16px;
+          }
+          
+          .bubble {
+            max-width: calc(100% - 52px);
+            padding: 12px;
+          }
+          
+          .msg-row {
+            gap: 12px;
+            margin-bottom: 16px;
+          }
+          
+          .avatar {
+            width: 32px;
+            height: 32px;
+          }
+          
+          .spline-container {
+            height: 200px;
+          }
+          
+          .empty-state {
+            padding: 20px 16px;
+            gap: 20px;
+          }
         }
       `}</style>
 
-      {/* Header - This is 'flex-shrink: 0' from the CSS */}
-      <div className="header" role="banner">
+      {/* Header */}
+      <div className="chat-header">
         <div className="header-left">
           <div className="robot-icon">
-            <BotIcon size={28} color="#e6e6e6" />
+            <Bot size={24} color="#e6e6e6" />
           </div>
-          <div className="min-w-0">
-            <div className="title truncate">{titleDisplay}</div>
+          <div className="title-section">
+            <h1 className="title">{titleDisplay}</h1>
             {activeDocument && <div className="subtitle">{activeDocument}</div>}
           </div>
         </div>
 
         <div className="desktop-toggles">
-          <div
-            className="desktop-toggle-btn"
+          <button
+            className="toggle-button"
             onClick={() => setShowSourcesDesktop && setShowSourcesDesktop(!showSourcesDesktop)}
           >
             <Sidebar size={14} />
             <span>{showSourcesDesktop ? "Hide Sources" : "Show Sources"}</span>
-          </div>
-          <div
-            className="desktop-toggle-btn"
+          </button>
+          <button
+            className="toggle-button"
             onClick={() => setShowInsightsDesktop && setShowInsightsDesktop(!showInsightsDesktop)}
           >
             <Activity size={14} />
             <span>{showInsightsDesktop ? "Hide Insights" : "Show Insights"}</span>
-          </div>
+          </button>
         </div>
       </div>
 
-      {/* Scrollable Messages - This is 'flex: 1' and 'overflow-y: auto' from the CSS */}
-      <div className="messages flex-1" ref={containerRef}>
+      {/* Messages Container */}
+      <div className="messages-container" ref={containerRef}>
         {!hasDocuments && messages.length === 0 ? (
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-full max-w-[700px] h-[300px] rounded-lg border border-white/10 overflow-hidden">
-              <Suspense fallback={<div className="h-full grid place-items-center">Loading 3D…</div>}>
+          <div className="empty-state">
+            <div className="spline-container">
+              <Suspense fallback={
+                <div className="h-full flex items-center justify-center text-gray-400">
+                  Loading 3D Scene...
+                </div>
+              }>
                 <Spline scene="https://prod.spline.design/n1Lad8xaG0iocaRW/scene.splinecode" />
               </Suspense>
             </div>
-            <h2 className="text-gray-200">Ask Anything</h2>
-            <p className="text-gray-400 text-center max-w-[520px]">
-              Upload your legal documents to begin AI-powered analysis and get instant insights.
-            </p>
+            <div>
+              <h2 className="text-2xl font-semibold text-gray-200 mb-3">Ask Anything</h2>
+              <p className="text-gray-400 text-center max-w-md leading-relaxed">
+                Upload your legal documents to begin AI-powered analysis and get instant insights.
+              </p>
+            </div>
           </div>
         ) : (
           <>
             {messages.map((m) => (
               <div key={m.id} className={`msg-row ${m.sender === "user" ? "user" : ""}`}>
                 <div className="avatar">
-                  {m.sender === "ai" ? <BotIcon size={16} color="#9edbff" /> : <User size={16} color="#7efbb5" />}
+                  {m.sender === "ai" ? 
+                    <Bot size={16} color="#60a5fa" /> : 
+                    <User size={16} color="#34d399" />
+                  }
                 </div>
                 <div className="bubble">
-                  <div className="flex justify-between mb-1">
-                    <Badge variant="outline" className="text-[11px] text-gray-300 border-white/10">
+                  <div className="message-header">
+                    <Badge variant="outline" className="text-xs text-gray-300 border-gray-600 bg-gray-800/50">
                       {m.sender === "ai" ? "AI Assistant" : "You"}
                     </Badge>
-                    <span className="text-[11px] text-gray-500">
-                      {m.timestamp instanceof Date ? m.timestamp.toLocaleTimeString() : new Date(m.timestamp).toLocaleTimeString()}
+                    <span className="message-time">
+                      {m.timestamp instanceof Date ? 
+                        m.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 
+                        new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      }
                     </span>
                   </div>
-                  {m.text}
+                  <div>{m.text}</div>
                 </div>
               </div>
             ))}
+            
             {isLoading && (
               <div className="msg-row">
                 <div className="avatar">
-                  <BotIcon size={16} color="#9edbff" />
+                  <Bot size={16} color="#60a5fa" />
                 </div>
                 <div className="bubble">
+                  <div className="message-header">
+                    <Badge variant="outline" className="text-xs text-gray-300 border-gray-600 bg-gray-800/50">
+                      AI Assistant
+                    </Badge>
+                  </div>
                   <div className="typing-dots">
                     <div className="dot" />
                     <div className="dot" />
@@ -244,29 +601,39 @@ export const ChatSection = ({
         )}
       </div>
 
-      {/* Sticky Input - This is 'flex-shrink: 0' from the CSS */}
-      <div className="sticky-input">
-        <div className="form-wrap">
-          <form onSubmit={handleSubmit} className="input-row">
+      {/* Input Section */}
+      <div className="input-section">
+        <div className="input-wrapper">
+          <div onSubmit={handleSubmit} className="input-form">
             <input
+              className="chat-input"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder="Ask about your documents..."
               disabled={isLoading}
             />
-            <button type="button">
-              <Mic size={14} color="#e6e6e6" />
+            <button type="button" className="input-button">
+              <Mic size={16} color="#9ca3af" />
             </button>
-            <button type="submit" disabled={!inputText.trim() || isLoading}>
-              <Send size={14} color="#fff" />
+            <button 
+              type="submit" 
+              disabled={!inputText.trim() || isLoading}
+              className="input-button"
+            >
+              <Send size={16} color={!inputText.trim() || isLoading ? "#6b7280" : "#60a5fa"} />
             </button>
-          </form>
+          </div>
 
-          <div className="suggest-row">
+          <div className="suggestions">
             {suggestedQuestions.map((q, i) => (
-              <div key={i} className="suggest-pill" onClick={() => handleSuggested(q)}>
+              <button 
+                key={i} 
+                className="suggestion-pill" 
+                onClick={() => handleSuggested(q)}
+                disabled={isLoading}
+              >
                 {q}
-              </div>
+              </button>
             ))}
           </div>
         </div>

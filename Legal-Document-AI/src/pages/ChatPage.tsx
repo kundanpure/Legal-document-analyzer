@@ -91,8 +91,8 @@ const StartupGuide = ({ backendUrl }: { backendUrl: string }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center p-4 font-sans">
-      <div className="max-w-2xl w-full bg-gray-800/40 backdrop-blur-lg rounded-2xl border border-gray-700/50 shadow-2xl p-8">
+    <div className="min-h-screen max-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center p-4 font-sans overflow-hidden">
+      <div className="max-w-2xl w-full bg-gray-800/40 backdrop-blur-lg rounded-2xl border border-gray-700/50 shadow-2xl p-8 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
@@ -196,7 +196,7 @@ const ChatPage = () => {
   const [activeDocument, setActiveDocument] = useState<string | null>(null);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [mobileView, setMobileView] = useState<"chat" | "sources" | "insights">("chat");
+  const [mobileView, setMobileView] = useState<"chat" | "sources" | "insights">("sources");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showSourcesDesktop, setShowSourcesDesktop] = useState(true);
   const [showInsightsDesktop, setShowInsightsDesktop] = useState(true);
@@ -279,7 +279,7 @@ const ChatPage = () => {
   }
 
   return (
-    <div className="font-sans bg-background flex flex-col h-screen">
+    <div className="font-sans bg-background flex flex-col h-screen max-h-screen overflow-hidden">
       <style>
         {`
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -292,27 +292,72 @@ const ChatPage = () => {
           .mobile-panel.insights.open { transform: translateX(0); }
           @media (min-width: 900px) { .mobile-only { display:none; } }
           @media (max-width: 899px) { .desktop-only { display:none; } }
+          
+          /* Ensure sections are scrollable but page is not */
+          .section-container { 
+            height: 100%; 
+            overflow-y: auto; 
+            overflow-x: hidden;
+          }
+          
+          /* Hide scrollbars but keep functionality */
+          .section-container::-webkit-scrollbar {
+            width: 6px;
+          }
+          .section-container::-webkit-scrollbar-track {
+            background: rgba(55, 65, 81, 0.1);
+          }
+          .section-container::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.3);
+            border-radius: 3px;
+          }
+          .section-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(156, 163, 175, 0.5);
+          }
         `}
       </style>
 
-      {/* This mobile header is fixed, so it's out of the layout flow. */}
-      <header className="fixed top-0 left-0 w-full z-30 bg-background py-4 px-6 flex justify-between items-center md:hidden border-b border-gray-800">
-        <a href="/" className="text-xl font-bold text-foreground z-30">Legal AI</a>
-        <button onClick={() => setIsMobileMenuOpen((prev) => !prev)} className="z-30">
-          {isMobileMenuOpen ? (
-            <svg className="w-6 h-6 text-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          ) : (
-            <svg className="w-6 h-6 text-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path>
-            </svg>
-          )}
-        </button>
+      {/* Mobile header - always visible and contains section headers */}
+      <header className="flex-shrink-0 bg-background py-4 px-6 border-b border-gray-800 md:hidden">
+        <div className="flex justify-between items-center">
+          <a href="/" className="text-xl font-bold text-foreground">Legal AI</a>
+          <button onClick={() => setIsMobileMenuOpen((prev) => !prev)}>
+            {isMobileMenuOpen ? (
+              <svg className="w-6 h-6 text-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            ) : (
+              <svg className="w-6 h-6 text-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+              </svg>
+            )}
+          </button>
+        </div>
+        
+        {/* Section Header for Mobile */}
+        <div className="mt-3 text-center">
+          <h2 className="text-lg font-semibold text-foreground">
+            {mobileView === "sources" && "Document Sources"}
+            {mobileView === "chat" && "AI Chat Assistant"}  
+            {mobileView === "insights" && "Document Insights"}
+          </h2>
+        </div>
+      </header>
+
+      {/* Desktop header - hidden on mobile */}
+      <header className="hidden md:block flex-shrink-0 bg-background py-4 px-6 border-b border-gray-800">
+        <div className="flex justify-between items-center">
+          <a href="/" className="text-xl font-bold text-foreground">Legal AI</a>
+          <nav className="flex space-x-6">
+            <a href="#" onClick={(e) => e.preventDefault()} className="text-muted-foreground hover:text-foreground transition-colors">Overview</a>
+            <a href="#" onClick={(e) => e.preventDefault()} className="text-muted-foreground hover:text-foreground transition-colors">Features</a>
+            <a href="#" onClick={(e) => e.preventDefault()} className="text-muted-foreground hover:text-foreground transition-colors">Contact</a>
+          </nav>
+        </div>
       </header>
 
       {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 top-16 z-20 bg-background p-6 pt-8">
+        <div className="md:hidden absolute inset-x-0 top-full z-20 bg-background p-6 border-b border-gray-800">
           <nav className="flex flex-col items-start space-y-4">
             <a href="#" onClick={(e) => e.preventDefault()} className="text-lg text-muted-foreground hover:text-foreground transition-colors">Overview</a>
             <a href="#" onClick={(e) => e.preventDefault()} className="text-lg text-muted-foreground hover:text-foreground transition-colors">Features</a>
@@ -321,12 +366,8 @@ const ChatPage = () => {
         </div>
       )}
 
-      {/* MODIFICATION: 
-        Added 'pt-16 md:pt-0'
-        'pt-16' (4rem) offsets the content to account for the fixed mobile header.
-        'md:pt-0' removes this padding on desktop, where the fixed header is hidden.
-      */}
-      <main className="flex-1 flex flex-row pt-16 md:pt-0" style={{ overflow: "hidden" }}>
+      {/* Main content - flex-1 to fill remaining space */}
+      <main className="flex-1 flex flex-row min-h-0" style={{ overflow: "hidden" }}>
         <div
           className={`${mobileView === "sources" ? "block w-full h-full" : "hidden"} md:block md:h-full`}
           style={{
@@ -337,13 +378,18 @@ const ChatPage = () => {
         >
           {showSourcesDesktop && (
             <div className="md:w-80 lg:w-96 h-full">
-              <SourcesPanel
-                uploadedFiles={uploadedFiles}
-                selectedFiles={selectedFiles}
-                onFileSelect={handleFileSelect}
-                onFileClick={handleFileClick}
-                onAddMore={() => setShowUploadModal(true)}
-              />
+              <div className="section-container">
+                <div className="hidden md:block p-4 border-b border-gray-800 bg-background/50">
+                  <h2 className="text-lg font-semibold text-foreground">Document Sources</h2>
+                </div>
+                <SourcesPanel
+                  uploadedFiles={uploadedFiles}
+                  selectedFiles={selectedFiles}
+                  onFileSelect={handleFileSelect}
+                  onFileClick={handleFileClick}
+                  onAddMore={() => setShowUploadModal(true)}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -352,16 +398,21 @@ const ChatPage = () => {
           className={`${mobileView === "chat" ? "flex" : "hidden"} flex-1 flex-col`}
           style={{ minHeight: 0, overflow: "hidden", transition: "width 200ms ease" }}
         >
-          <ChatSection
-            activeDocument={activeDocument}
-            hasDocuments={uploadedFiles.length > 0}
-            activeFileId={activeFileId}
-            onConversationIdChange={handleConversationIdChange}
-            showSourcesDesktop={showSourcesDesktop}
-            setShowSourcesDesktop={setShowSourcesDesktop}
-            showInsightsDesktop={showInsightsDesktop}
-            setShowInsightsDesktop={setShowInsightsDesktop}
-          />
+          <div className="hidden md:block p-4 border-b border-gray-800 bg-background/50">
+            <h2 className="text-lg font-semibold text-foreground">AI Chat Assistant</h2>
+          </div>
+          <div className="section-container">
+            <ChatSection
+              activeDocument={activeDocument}
+              hasDocuments={uploadedFiles.length > 0}
+              activeFileId={activeFileId}
+              onConversationIdChange={handleConversationIdChange}
+              showSourcesDesktop={showSourcesDesktop}
+              setShowSourcesDesktop={setShowSourcesDesktop}
+              showInsightsDesktop={showInsightsDesktop}
+              setShowInsightsDesktop={setShowInsightsDesktop}
+            />
+          </div>
         </div>
 
         <div
@@ -374,21 +425,24 @@ const ChatPage = () => {
         >
           {showInsightsDesktop && (
             <div className="lg:w-80 h-full">
-              <InsightsPanel
-                activeDocument={activeDocument}
-                hasDocuments={uploadedFiles.length > 0}
-                activeFileId={activeFileId}
-                conversationId={conversationId}
-              />
+              <div className="section-container">
+                <div className="hidden md:block p-4 border-b border-gray-800 bg-background/50">
+                  <h2 className="text-lg font-semibold text-foreground">Document Insights</h2>
+                </div>
+                <InsightsPanel
+                  activeDocument={activeDocument}
+                  hasDocuments={uploadedFiles.length > 0}
+                  activeFileId={activeFileId}
+                  conversationId={conversationId}
+                />
+              </div>
             </div>
           )}
         </div>
       </main>
 
-      {/* This mobile footer is part of the flex-col, so it correctly
-        sits at the bottom of the h-screen view. No changes needed.
-      */}
-      <div className="md:hidden flex justify-around p-2 border-t bg-background shadow-sm mobile-only" style={{ position: "relative", zIndex: 10 }}>
+      {/* Static Footer - always at bottom, no scrolling */}
+      <footer className="flex-shrink-0 md:hidden flex justify-around p-3 border-t bg-background shadow-lg" style={{ position: "relative", zIndex: 10 }}>
         <button
           onClick={() => {
             setMobileView("sources");
@@ -419,7 +473,7 @@ const ChatPage = () => {
         >
           Insights
         </button>
-      </div>
+      </footer>
 
       {showSourcesMobile && (
         <>
