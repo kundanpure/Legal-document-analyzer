@@ -5,6 +5,7 @@ import { InsightsPanel } from "@/components/chat/InsightsPanel";
 import { UploadModal } from "@/components/chat/UploadModal";
 import { useFiles, useUploadFile } from "@/hooks/api";
 import { useToast } from "@/hooks/use-toast";
+import { Clock, Server, Zap, CheckCircle, AlertCircle } from "lucide-react";
 
 interface UploadedFile {
   id: string;
@@ -13,6 +14,181 @@ interface UploadedFile {
   type: string;
   uploadedAt: Date;
 }
+
+const StartupGuide = ({ backendUrl }: { backendUrl: string }) => {
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'starting' | 'ready' | 'error'>('checking');
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsedTime(prev => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const checkBackendStatus = async () => {
+      try {
+        const response = await fetch(`${backendUrl}/health`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        
+        if (response.ok) {
+          setBackendStatus('ready');
+        } else {
+          setBackendStatus('starting');
+        }
+      } catch (error) {
+        setBackendStatus('starting');
+      }
+    };
+
+    // Initial check
+    checkBackendStatus();
+
+    // Check every 5 seconds
+    const interval = setInterval(checkBackendStatus, 5000);
+
+    return () => clearInterval(interval);
+  }, [backendUrl]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getStatusIcon = () => {
+    switch (backendStatus) {
+      case 'checking':
+        return <Clock className="w-6 h-6 text-blue-500 animate-pulse" />;
+      case 'starting':
+        return <Server className="w-6 h-6 text-orange-500 animate-spin" />;
+      case 'ready':
+        return <CheckCircle className="w-6 h-6 text-green-500" />;
+      case 'error':
+        return <AlertCircle className="w-6 h-6 text-red-500" />;
+      default:
+        return <Clock className="w-6 h-6 text-blue-500" />;
+    }
+  };
+
+  const getStatusMessage = () => {
+    switch (backendStatus) {
+      case 'checking':
+        return 'Checking backend server status...';
+      case 'starting':
+        return 'Backend server is starting up...';
+      case 'ready':
+        return 'Backend server is ready!';
+      case 'error':
+        return 'Having trouble connecting to the backend server';
+      default:
+        return 'Initializing...';
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center p-4 font-sans">
+      <div className="max-w-2xl w-full bg-gray-800/40 backdrop-blur-lg rounded-2xl border border-gray-700/50 shadow-2xl p-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center mb-4">
+            <Zap className="w-8 h-8 text-blue-400 mr-2" />
+            <h1 className="text-3xl font-bold text-white">Legal AI Assistant</h1>
+          </div>
+          <p className="text-gray-300 text-lg">Getting everything ready for you...</p>
+        </div>
+
+        {/* Status Section */}
+        <div className="bg-gray-800/50 rounded-xl p-6 mb-6 border border-gray-700/30">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              {getStatusIcon()}
+              <span className="text-white font-medium">{getStatusMessage()}</span>
+            </div>
+            <div className="text-gray-400 font-mono text-sm">
+              {formatTime(elapsedTime)}
+            </div>
+          </div>
+          
+          {/* Progress Bar */}
+          <div className="w-full bg-gray-700/50 rounded-full h-2 mb-4">
+            <div 
+              className={`h-2 rounded-full transition-all duration-500 ${
+                backendStatus === 'ready' 
+                  ? 'bg-green-500 w-full' 
+                  : 'bg-blue-500 w-1/2 animate-pulse'
+              }`}
+            />
+          </div>
+
+          {backendStatus === 'ready' && (
+            <div className="text-center">
+              <p className="text-green-400 font-medium">🎉 All systems ready! Redirecting...</p>
+            </div>
+          )}
+        </div>
+
+        {/* Information Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="bg-gray-800/40 rounded-lg p-4 border border-gray-700/40">
+            <h3 className="text-white font-semibold mb-2 flex items-center">
+              <Server className="w-4 h-4 mr-2 text-blue-400" />
+              Backend Hosting
+            </h3>
+            <p className="text-gray-300 text-sm">
+              We're using free hosting for our backend services. This means the server goes to sleep when not in use to save resources.
+            </p>
+          </div>
+
+          <div className="bg-gray-800/40 rounded-lg p-4 border border-gray-700/40">
+            <h3 className="text-white font-semibold mb-2 flex items-center">
+              <Clock className="w-4 h-4 mr-2 text-blue-400" />
+              Startup Time
+            </h3>
+            <p className="text-gray-300 text-sm">
+              The first request may take 30-60 seconds as the server wakes up and initializes all services.
+            </p>
+          </div>
+        </div>
+
+        {/* What's Happening Section */}
+        <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/30">
+          <h3 className="text-white font-semibold mb-4 text-center">What's happening behind the scenes?</h3>
+          <div className="space-y-3">
+            <div className="flex items-center space-x-3">
+              <div className={`w-3 h-3 rounded-full ${backendStatus !== 'checking' ? 'bg-green-500' : 'bg-blue-500 animate-pulse'}`} />
+              <span className="text-gray-300 text-sm">Waking up the backend server</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <div className={`w-3 h-3 rounded-full ${backendStatus === 'ready' ? 'bg-green-500' : backendStatus === 'starting' ? 'bg-blue-500 animate-pulse' : 'bg-gray-600'}`} />
+              <span className="text-gray-300 text-sm">Loading AI models and dependencies</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <div className={`w-3 h-3 rounded-full ${backendStatus === 'ready' ? 'bg-green-500' : 'bg-gray-600'}`} />
+              <span className="text-gray-300 text-sm">Preparing your document analysis environment</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="text-center mt-6">
+          <p className="text-gray-400 text-sm">
+            Thank you for your patience! This one-time setup ensures optimal performance.
+          </p>
+          {backendStatus === 'starting' && (
+            <p className="text-blue-400 text-xs mt-2 animate-pulse">
+              Average wait time: 45 seconds • Server URL: {backendUrl}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const ChatPage = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -27,6 +203,7 @@ const ChatPage = () => {
   const [showSourcesMobile, setShowSourcesMobile] = useState(false);
   const [showInsightsMobile, setShowInsightsMobile] = useState(false);
 
+  const backendUrl = "https://legal-document-analyzer-3zxk.onrender.com";
   const { toast } = useToast();
   const { data: filesData, isLoading, error, refetch } = useFiles();
   const uploadMutation = useUploadFile();
@@ -98,22 +275,15 @@ const ChatPage = () => {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-          <p className="mt-4">Loading your documents...</p>
-        </div>
-      </div>
-    );
+    return <StartupGuide backendUrl={backendUrl} />;
   }
 
   return (
-    <div className="font-poppins bg-background flex flex-col h-screen">
+    <div className="font-sans bg-background flex flex-col h-screen">
       <style>
         {`
-          @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap');
-          .font-poppins { font-family: 'Poppins', sans-serif; }
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+          .font-sans { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
           .mobile-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 40; }
           .mobile-panel { position: fixed; top: 0; bottom: 0; width: 80%; max-width: 360px; z-index: 50; transition: transform 0.28s ease-in-out; display:flex; flex-direction:column; }
           .mobile-panel.sources { left: 0; transform: translateX(-100%); }
