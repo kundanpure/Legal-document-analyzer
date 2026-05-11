@@ -1,8 +1,0 @@
-[
-  {
-    "origin": ["http://localhost:5173", "http://localhost:3000", "http://localhost:8080"],
-    "method": ["PUT", "GET", "HEAD", "OPTIONS"],
-    "responseHeader": ["Content-Type", "Content-Length", "x-goog-resumable", "x-goog-meta-*"],
-    "maxAgeSeconds": 3600
-  }
-]
