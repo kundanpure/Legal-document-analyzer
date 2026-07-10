@@ -1,0 +1,10 @@
+venv
+__pycache__
+*.pyc
+.env
+gcp-key.json
+*gcp-key*.json
+*docanalyzer*.json
+.DS_Store
+logs/
+temp/
