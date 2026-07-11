@@ -127,7 +127,7 @@ const DashboardPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {/* Create New Notebook Card */}
             <Card 
-              onClick={() => navigate("/chat", { state: { newNotebook: true } })}
+              onClick={() => navigate("/chat?new=true")}
               className="group cursor-pointer border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20 transition-all duration-300 rounded-2xl h-56 flex flex-col items-center justify-center shadow-lg hover:shadow-xl hover:-translate-y-1"
             >
               <div className="w-14 h-14 rounded-full bg-blue-500/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-blue-500/20 transition-all">
@@ -141,7 +141,7 @@ const DashboardPage = () => {
             {notebooks.map((notebook: any) => (
               <Card 
                 key={notebook.file_id}
-                onClick={() => navigate("/chat", { state: { activeFileId: notebook.file_id } })}
+                onClick={() => navigate(`/chat/${notebook.file_id}`)}
                 className="group cursor-pointer border border-white/10 bg-[#0A0A0A] hover:border-white/20 transition-all duration-300 rounded-2xl h-56 flex flex-col p-6 shadow-lg hover:shadow-xl hover:-translate-y-1 relative overflow-hidden"
               >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-full -mr-10 -mt-10 transition-all group-hover:bg-blue-500/10" />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { SourcesPanel } from "@/components/chat/SourcesPanel";
 import { ChatSection } from "@/components/chat/ChatSection";
@@ -214,6 +214,8 @@ const ChatPage = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { fileId } = useParams<{ fileId: string }>();
+  const [searchParams] = useSearchParams();
 
   const handleLogout = async () => {
     try {
@@ -234,13 +236,16 @@ const ChatPage = () => {
   const { data: filesData, isLoading, error, refetch } = useFiles();
   const uploadMutation = useUploadFile();
 
-  // Pick up activeFileId from navigation state if available
+  // Pick up activeFileId from URL params or navigation state
   useEffect(() => {
-    if (location.state?.activeFileId) {
+    if (fileId) {
+      setActiveFileId(fileId);
+      setSelectedFiles([fileId]);
+    } else if (location.state?.activeFileId) {
       setActiveFileId(location.state.activeFileId);
       setSelectedFiles([location.state.activeFileId]);
     }
-  }, [location.state]);
+  }, [fileId, location.state]);
 
   const uploadedFiles: UploadedFile[] =
     filesData?.files?.map((file: any) => ({
@@ -268,32 +273,46 @@ const ChatPage = () => {
   }, [error, toast]);
 
   useEffect(() => {
-    if (location.state?.newNotebook) {
+    const isNew = searchParams.get('new') === 'true';
+    if (isNew || location.state?.newNotebook) {
       setShowUploadModal(true);
       // Clean up the state properly using React Router
-      navigate(location.pathname, { replace: true, state: {} });
+      navigate('/chat', { replace: true, state: {} });
       return;
     }
-    if (selectedFiles.length === 0 && uploadedFiles.length > 0 && !location.state?.activeFileId) {
+    if (selectedFiles.length === 0 && uploadedFiles.length > 0 && !fileId && !location.state?.activeFileId) {
       const firstFile = uploadedFiles[0];
       setSelectedFiles([firstFile.id]);
       setActiveDocument(firstFile.name);
       setActiveFileId(firstFile.id);
-    } else if (location.state?.activeFileId && uploadedFiles.length > 0) {
-      const activeFile = uploadedFiles.find(f => f.id === location.state.activeFileId);
+      // Update URL to match selected file
+      navigate(`/chat/${firstFile.id}`, { replace: true });
+    } else if ((fileId || location.state?.activeFileId) && uploadedFiles.length > 0) {
+      const targetId = fileId || location.state?.activeFileId;
+      const activeFile = uploadedFiles.find(f => f.id === targetId);
       if (activeFile) {
         setActiveDocument(activeFile.name);
       }
     }
-  }, [uploadedFiles, selectedFiles.length, location.state]);
+  }, [uploadedFiles, selectedFiles.length, fileId, location.state, searchParams, navigate]);
 
   const handleFilesUploaded = async (files: File[]) => {
     try {
+      let lastUploadedId = null;
       for (const file of files) {
-        await uploadMutation.mutateAsync(file);
+        const resp = await uploadMutation.mutateAsync(file);
+        // Assuming your mutation returns the uploaded file_id
+        if (resp && resp.file_id) {
+            lastUploadedId = resp.file_id;
+        }
       }
       await refetch();
       setShowUploadModal(false);
+      
+      // Navigate to the newly uploaded file if we got its ID
+      if (lastUploadedId) {
+          navigate(`/chat/${lastUploadedId}`);
+      }
     } catch (err) {
       console.error("Upload failed:", err);
     }
