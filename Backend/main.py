@@ -437,14 +437,14 @@ async def download_file_from_gcs_real(gcs_path: str) -> str:
         import tempfile
 
         creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if not creds_path or not os.path.exists(creds_path):
-            raise Exception(f"GOOGLE_APPLICATION_CREDENTIALS not found or invalid: {creds_path}")
-        creds = service_account.Credentials.from_service_account_file(creds_path)
-
-        client = storage.Client(
-            project=settings.GOOGLE_CLOUD_PROJECT,
-            credentials=creds
-        )
+        if creds_path and os.path.exists(creds_path):
+            creds = service_account.Credentials.from_service_account_file(creds_path)
+            client = storage.Client(
+                project=settings.GOOGLE_CLOUD_PROJECT,
+                credentials=creds
+            )
+        else:
+            client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT)
 
         bucket_name = settings.GCS_BUCKET_NAME
         if gcs_path.startswith("gs://"):
@@ -633,11 +633,11 @@ async def get_file_download_url(file_id: str):
                 raise HTTPException(status_code=500, detail=f"Invalid gcs_path: {gcs_path}")
 
         creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if not creds_path or not os.path.exists(creds_path):
-            raise HTTPException(status_code=500, detail="Missing GOOGLE_APPLICATION_CREDENTIALS")
-        creds = service_account.Credentials.from_service_account_file(creds_path)
-
-        client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT, credentials=creds)
+        if creds_path and os.path.exists(creds_path):
+            creds = service_account.Credentials.from_service_account_file(creds_path)
+            client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT, credentials=creds)
+        else:
+            client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT)
         blob = client.bucket(bucket_name).blob(object_key)
 
         download_url = blob.generate_signed_url(
