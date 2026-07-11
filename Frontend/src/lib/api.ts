@@ -125,9 +125,11 @@ class ApiService {
     const url = `${this.baseUrl}${endpoint}`;
     
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     try {
       if (auth?.currentUser) {
@@ -435,53 +437,51 @@ class ApiService {
     return `${this.baseUrl}${endpoint}`;
   }
 
-  // File upload helper - handles the full upload flow
   async uploadFile(file: File): Promise<{
-  file_id: string;
-  processing_started: boolean;
-  job_id?: string;
-}> {
-  try {
-    console.log("Starting file upload:", { name: file.name, size: file.size, type: file.type });
+    file_id: string;
+    processing_started: boolean;
+    job_id?: string;
+  }> {
+    try {
+      console.log("Starting file upload directly:", { name: file.name, size: file.size, type: file.type });
 
-    // 1) Ask backend for a signed URL
-    const signed = await this.getSignedUrl(file.name, file.type || "application/pdf", file.size);
-    console.log("Signed URL obtained:", signed.file_id);
+      const formData = new FormData();
+      formData.append("file", file);
 
-    // 2) Upload bytes to GCS (critical!)
-    await putToSignedUrl(signed.signed_url, file, file.type || "application/pdf");
+      // 1) Direct upload to backend
+      const uploadResp = await this.request<{
+          file_id: string;
+          gcs_path: string;
+          filename: string;
+          content_type: string;
+          size: number;
+      }>('/api/uploads/direct', {
+          method: 'POST',
+          body: formData,
+      });
 
-    // 3) Compute gcs_path to notify the backend
-    // Prefer the backend-provided value. If missing, build one using your bucket name env.
-    let gcs_path = signed.gcs_path;
-    if (!gcs_path) {
-      const bucket = import.meta.env.VITE_GCS_BUCKET_NAME; // <-- add this to your .env for the frontend
-      if (!bucket) {
-        throw new Error("Missing gcs_path in get-signed-url response and VITE_GCS_BUCKET_NAME is not set");
-      }
-      gcs_path = `gs://${bucket}/${signed.upload_fields.key}`;
+      console.log("Upload direct response:", uploadResp);
+
+      // 2) Tell backend the object is in GCS
+      const notification = await this.notifyUploaded({
+        file_id: uploadResp.file_id,
+        gcs_path: uploadResp.gcs_path,
+        original_filename: uploadResp.filename,
+        file_size: uploadResp.size,
+        content_type: uploadResp.content_type || "application/pdf",
+      });
+
+      console.log("Upload notification sent:", notification);
+
+      return {
+        file_id: uploadResp.file_id,
+        processing_started: notification.processing_started,
+      };
+    } catch (error) {
+      console.error("Upload process failed:", error);
+      throw error;
     }
-
-    // 4) Tell backend the object is in GCS
-    const notification = await this.notifyUploaded({
-      file_id: signed.file_id,
-      gcs_path,
-      original_filename: file.name,
-      file_size: file.size,
-      content_type: file.type || "application/pdf",
-    });
-
-    console.log("Upload notification sent:", notification);
-
-    return {
-      file_id: signed.file_id,
-      processing_started: notification.processing_started,
-    };
-  } catch (error) {
-    console.error("Upload process failed:", error);
-    throw error;
   }
-}
 
 }
 

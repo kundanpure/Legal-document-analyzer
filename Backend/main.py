@@ -264,50 +264,45 @@ async def verify_token(request: AuthTokenRequest):
 from google.cloud import storage
 from google.oauth2 import service_account
 
-@app.post("/api/uploads/get-signed-url")
-async def get_signed_url(request: SignedUrlRequest):
-    """
-    Return a real V4 signed URL for uploading directly to GCS via PUT.
-    """
+from fastapi import File, UploadFile
+from google.cloud import storage
+
+@app.post("/api/uploads/direct")
+async def upload_direct(file: UploadFile = File(...)):
     try:
         file_id = generate_id("file")
-        filename = request.filename
+        filename = file.filename
         object_key = f"uploads/{file_id}/{filename}"
-        content_type = request.content_type or "application/pdf"
-
+        
         creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if not creds_path or not os.path.exists(creds_path):
-            raise HTTPException(
-                status_code=500,
-                detail=f"GOOGLE_APPLICATION_CREDENTIALS not found or invalid: {creds_path}"
-            )
-        creds = service_account.Credentials.from_service_account_file(creds_path)
-
-        storage_client = storage.Client(
-            project=settings.GOOGLE_CLOUD_PROJECT,
-            credentials=creds
-        )
+        if creds_path and os.path.exists(creds_path):
+            creds = service_account.Credentials.from_service_account_file(creds_path)
+            storage_client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT, credentials=creds)
+        else:
+            storage_client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT)
+            
         bucket = storage_client.bucket(settings.GCS_BUCKET_NAME)
         blob = bucket.blob(object_key)
-
-        signed_url = blob.generate_signed_url(
-            method="PUT",
-            version="v4",
-            expiration=timedelta(minutes=10),
-            content_type=content_type,
+        
+        content = await file.read()
+        
+        # Run upload in thread to not block event loop
+        await asyncio.to_thread(
+            blob.upload_from_string, 
+            content, 
+            content_type=file.content_type
         )
-
+        
         return {
             "file_id": file_id,
-            "signed_url": signed_url,
-            "expires_at": get_utc_timestamp(),
-            "upload_fields": {"key": object_key, "Content-Type": content_type},
             "gcs_path": f"gs://{settings.GCS_BUCKET_NAME}/{object_key}",
+            "filename": filename,
+            "content_type": file.content_type,
+            "size": len(content)
         }
-
     except Exception as e:
-        logger.error(f"Signed URL generation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate signed URL: {e}")
+        logger.error(f"Direct upload failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
 
 @app.post("/api/uploads/notify-uploaded")
 async def notify_uploaded(req: UploadNotificationRequest, request: Request):
