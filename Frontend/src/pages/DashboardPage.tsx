@@ -127,7 +127,7 @@ const DashboardPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {/* Create New Notebook Card */}
             <Card 
-              onClick={() => navigate("/chat")}
+              onClick={() => navigate("/chat", { state: { newNotebook: true } })}
               className="group cursor-pointer border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20 transition-all duration-300 rounded-2xl h-56 flex flex-col items-center justify-center shadow-lg hover:shadow-xl hover:-translate-y-1"
             >
               <div className="w-14 h-14 rounded-full bg-blue-500/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-blue-500/20 transition-all">

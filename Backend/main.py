@@ -82,11 +82,11 @@ def _download_gcs_as_bytes(gcs_uri: str) -> bytes:
         object_key = gcs_uri.lstrip("/")
 
     creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    if not creds_path or not os.path.exists(creds_path):
-        raise RuntimeError("Missing GOOGLE_APPLICATION_CREDENTIALS")
-    creds = service_account.Credentials.from_service_account_file(creds_path)
-
-    client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT, credentials=creds)
+    if creds_path and os.path.exists(creds_path):
+        creds = service_account.Credentials.from_service_account_file(creds_path)
+        client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT, credentials=creds)
+    else:
+        client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT)
     blob = client.bucket(bucket_name).blob(object_key)
     if not blob.exists(client):
         raise FileNotFoundError(f"GCS object not found: gs://{bucket_name}/{object_key}")

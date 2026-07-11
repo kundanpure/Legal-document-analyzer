@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { Badge } from "@/components/ui/badge";
+import ReactMarkdown from 'react-markdown';
 import { Send, Mic, Bot as BotIcon, User, Sidebar, Activity } from "lucide-react";
 import { useChat, useConversation } from "@/hooks/api";
 
@@ -241,7 +242,13 @@ export const ChatSection = ({
                       {m.timestamp instanceof Date ? m.timestamp.toLocaleTimeString() : new Date(m.timestamp).toLocaleTimeString()}
                     </span>
                   </div>
-                  {m.text}
+                  {m.sender === "ai" ? (
+                    <div className="prose prose-invert prose-sm max-w-none text-sm text-gray-200">
+                      <ReactMarkdown>{m.text}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    m.text
+                  )}
                 </div>
               </div>
             ))}

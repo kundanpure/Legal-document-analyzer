@@ -268,6 +268,12 @@ const ChatPage = () => {
   }, [error, toast]);
 
   useEffect(() => {
+    if (location.state?.newNotebook) {
+      setShowUploadModal(true);
+      // Clean up the state so it doesn't keep showing on reload
+      window.history.replaceState({}, document.title)
+      return;
+    }
     if (selectedFiles.length === 0 && uploadedFiles.length > 0 && !location.state?.activeFileId) {
       const firstFile = uploadedFiles[0];
       setSelectedFiles([firstFile.id]);
@@ -279,7 +285,7 @@ const ChatPage = () => {
         setActiveDocument(activeFile.name);
       }
     }
-  }, [uploadedFiles, selectedFiles.length, location.state?.activeFileId]);
+  }, [uploadedFiles, selectedFiles.length, location.state]);
 
   const handleFilesUploaded = async (files: File[]) => {
     try {
