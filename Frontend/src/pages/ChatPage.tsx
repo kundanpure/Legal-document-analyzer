@@ -209,7 +209,7 @@ const ChatPage = () => {
   const [showSourcesMobile, setShowSourcesMobile] = useState(false);
   const [showInsightsMobile, setShowInsightsMobile] = useState(false);
 
-  const backendUrl = "http://localhost:8000";
+  const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
   const { toast } = useToast();
   const { user, loading } = useAuth();
   const navigate = useNavigate();

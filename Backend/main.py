@@ -306,6 +306,7 @@ async def upload_direct(file: UploadFile = File(...), notebook_id: Optional[str]
             "gcs_path": f"gs://{settings.GCS_BUCKET_NAME}/{object_key}",
             "filename": filename,
             "content_type": file.content_type,
+            "size": len(content),
             "processing_started": True,
             "notebook_id": notebook_id
         }
