@@ -174,7 +174,6 @@ class ApiService {
       }
 
       const data = await response.json();
-      console.log('API Success:', { endpoint, dataKeys: Object.keys(data) });
       return data;
 
     } catch (error) {
@@ -456,8 +455,6 @@ class ApiService {
     job_id?: string;
   }> {
     try {
-      console.log("Starting file upload directly:", { name: file.name, size: file.size, type: file.type });
-
       const formData = new FormData();
       formData.append("file", file);
 
@@ -477,8 +474,6 @@ class ApiService {
           body: formData,
       });
 
-      console.log("Upload direct response:", uploadResp);
-
       // 2) Tell backend the object is in GCS
       const notification = await this.notifyUploaded({
         file_id: uploadResp.file_id,
@@ -488,8 +483,6 @@ class ApiService {
         content_type: uploadResp.content_type || "application/pdf",
         notebook_id: notebookId,
       });
-
-      console.log("Upload notification sent:", notification);
 
       return {
         file_id: uploadResp.file_id,
