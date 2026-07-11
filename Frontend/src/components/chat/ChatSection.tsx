@@ -214,7 +214,7 @@ export const ChatSection = ({
 
       {/* Scrollable Messages - This is 'flex: 1' and 'overflow-y: auto' from the CSS */}
       <div className="messages flex-1" ref={containerRef}>
-        {!hasDocuments && messages.length === 0 ? (
+        {!activeFileId || messages.length === 0 ? (
           <div className="flex flex-col items-center gap-4">
             <div className="w-full max-w-[700px] h-[300px] rounded-lg border border-white/10 overflow-hidden">
               <Suspense fallback={<div className="h-full grid place-items-center">Loading 3D…</div>}>

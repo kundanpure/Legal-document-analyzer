@@ -280,13 +280,10 @@ const ChatPage = () => {
       navigate('/chat', { replace: true, state: {} });
       return;
     }
-    if (selectedFiles.length === 0 && uploadedFiles.length > 0 && !fileId && !location.state?.activeFileId) {
-      const firstFile = uploadedFiles[0];
-      setSelectedFiles([firstFile.id]);
-      setActiveDocument(firstFile.name);
-      setActiveFileId(firstFile.id);
-      // Update URL to match selected file
-      navigate(`/chat/${firstFile.id}`, { replace: true });
+    if (!fileId && !location.state?.activeFileId) {
+      setActiveFileId(null);
+      setActiveDocument(null);
+      setSelectedFiles([]);
     } else if ((fileId || location.state?.activeFileId) && uploadedFiles.length > 0) {
       const targetId = fileId || location.state?.activeFileId;
       const activeFile = uploadedFiles.find(f => f.id === targetId);
