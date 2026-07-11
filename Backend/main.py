@@ -1493,3 +1493,14 @@ if __name__ == "__main__":
     logger.info(" API Documentation: http://localhost:8000/docs")
     logger.info(f" Services loaded: {len(available_services)}")
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+
+@app.get("/api/debug/imports")
+def debug_imports():
+    errors = {}
+    for service_name, module_path in service_imports.items():
+        try:
+            importlib.import_module(module_path)
+        except Exception as e:
+            import traceback
+            errors[service_name] = traceback.format_exc()
+    return errors
