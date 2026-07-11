@@ -418,9 +418,6 @@ class Settings:
             if not self.google_cloud.api_key:
                 errors.append("GOOGLE_API_KEY must be set in production")
             
-            if not self.google_cloud.service_account_path:
-                errors.append("GOOGLE_APPLICATION_CREDENTIALS must be set in production")
-            
             if self.security.secret_key == "default-secret-key":
                 errors.append("SECRET_KEY must be changed from default in production")
         
