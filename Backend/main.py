@@ -487,6 +487,9 @@ async def process_file_job(file_id: str, job_id: str):
                         }
                         chat["updated_at"] = get_utc_timestamp()
                     logger.info(f" [AI] Auto-title='{chat_title}', summary generated ({len(doc_summary)} chars)")
+                    
+                    # Persist the changes immediately
+                    save_db()
         except Exception as e:
             logger.warning(f" [AI] Auto-title/summary generation failed (non-fatal): {e}")
 
@@ -839,6 +842,7 @@ async def request_summary_generation(file_id: str, request: Optional[InsightRequ
 
         files_data[file_id].setdefault("insights", {})
         files_data[file_id]["insights"]["summary"] = summary_data
+        save_db()
         return summary_data
 
     except HTTPException:
@@ -912,6 +916,7 @@ async def request_audio_generation(file_id: str, request: Optional[InsightReques
 
         files_data[file_id].setdefault("insights", {})
         files_data[file_id]["insights"]["audio"] = audio_data
+        save_db()
         return audio_data
 
     except HTTPException:
@@ -1002,6 +1007,7 @@ async def request_report_generation(file_id: str, request: Optional[InsightReque
 
         files_data[file_id].setdefault("insights", {})
         files_data[file_id]["insights"]["report"] = report_data
+        save_db()
         return report_data
 
     except HTTPException:

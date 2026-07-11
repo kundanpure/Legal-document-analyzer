@@ -121,18 +121,30 @@ const ChatPage = () => {
       navigate(`/chat/${chatId}`, { replace: true, state: {} });
       return;
     }
-    if (!activeFileId && !location.state?.activeFileId) {
+    
+    if (filesData?.files?.length > 0) {
+      const currentFiles = filesData.files;
+      const targetId = activeFileId || location.state?.activeFileId;
+      
+      if (!targetId) {
+        // No active file, set to the first one
+        const firstFile = currentFiles[0];
+        setActiveFileId(firstFile.file_id);
+        setActiveDocument(firstFile.filename);
+        setSelectedFiles(prev => !prev.includes(firstFile.file_id) ? [...prev, firstFile.file_id] : prev);
+      } else {
+        const activeFile = currentFiles.find((f: any) => f.file_id === targetId);
+        if (activeFile) {
+          setActiveDocument(activeFile.filename);
+          setSelectedFiles(prev => !prev.includes(activeFile.file_id) ? [...prev, activeFile.file_id] : prev);
+        }
+      }
+    } else if (filesData?.files?.length === 0) {
       setActiveFileId(null);
       setActiveDocument(null);
       setSelectedFiles([]);
-    } else if ((activeFileId || location.state?.activeFileId) && uploadedFiles.length > 0) {
-      const targetId = activeFileId || location.state?.activeFileId;
-      const activeFile = uploadedFiles.find(f => f.id === targetId);
-      if (activeFile) {
-        setActiveDocument(activeFile.name);
-      }
     }
-  }, [uploadedFiles, selectedFiles.length, activeFileId, location.state, searchParams, navigate, chatId]);
+  }, [filesData?.files, activeFileId, location.state, searchParams, navigate, chatId]);
 
   const handleFilesUploaded = async (files: File[]) => {
     try {
@@ -311,6 +323,7 @@ const ChatPage = () => {
             setShowSourcesDesktop={setShowSourcesDesktop}
             showInsightsDesktop={showInsightsDesktop}
             setShowInsightsDesktop={setShowInsightsDesktop}
+            chatStatus={statusData}
           />
         </div>
 

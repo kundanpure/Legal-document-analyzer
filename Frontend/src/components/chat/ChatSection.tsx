@@ -30,6 +30,7 @@ interface ChatSectionProps {
   setInputText?: (v: string) => void;
   sendMessage?: (text: string) => Promise<void>;
   isLoading?: boolean;
+  chatStatus?: any;
 }
 
 const suggestedQuestions = [
@@ -57,6 +58,7 @@ export const ChatSection = ({
   setInputText: setInputTextProp,
   sendMessage: sendMessageProp,
   isLoading: isLoadingProp,
+  chatStatus,
 }: ChatSectionProps) => {
   const [internalMessages, setInternalMessages] = useState<Message[]>([]);
   const [internalInputText, setInternalInputText] = useState("");
@@ -221,16 +223,54 @@ export const ChatSection = ({
       {/* Scrollable Messages - This is 'flex: 1' and 'overflow-y: auto' from the CSS */}
       <div className="messages flex-1" ref={containerRef}>
         {!hasDocuments || messages.length === 0 ? (
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-full max-w-[700px] h-[300px] rounded-lg border border-white/10 overflow-hidden">
-              <Suspense fallback={<div className="h-full grid place-items-center">Loading 3D…</div>}>
-                <Spline scene="https://prod.spline.design/n1Lad8xaG0iocaRW/scene.splinecode" />
-              </Suspense>
-            </div>
-            <h2 className="text-gray-200">Ask Anything</h2>
-            <p className="text-gray-400 text-center max-w-[520px]">
-              Upload your legal documents to begin AI-powered analysis and get instant insights.
-            </p>
+          <div className="flex flex-col items-center gap-4 py-8 px-4">
+            {!hasDocuments ? (
+              <>
+                <div className="w-full max-w-[700px] h-[300px] rounded-lg border border-white/10 overflow-hidden hidden md:block">
+                  <Suspense fallback={<div className="h-full grid place-items-center">Loading 3D…</div>}>
+                    <Spline scene="https://prod.spline.design/n1Lad8xaG0iocaRW/scene.splinecode" />
+                  </Suspense>
+                </div>
+                <h2 className="text-gray-200 text-xl font-medium mt-4">Ask Anything</h2>
+                <p className="text-gray-400 text-center max-w-[520px]">
+                  Upload your legal documents to begin AI-powered analysis and get instant insights.
+                </p>
+              </>
+            ) : (
+              <div className="w-full max-w-3xl flex flex-col gap-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <BotIcon size={24} color="#9edbff" />
+                  <h2 className="text-lg font-medium text-gray-200">Document Summaries</h2>
+                </div>
+                {(() => {
+                  const targetIds = selectedFileIds.length > 0 ? selectedFileIds : (activeFileId ? [activeFileId] : []);
+                  const summaries = targetIds
+                    .map(id => chatStatus?.files?.find((f: any) => f.file_id === id))
+                    .filter(f => f?.doc_summary);
+                  
+                  if (summaries.length === 0) {
+                     return (
+                       <div className="p-6 rounded-xl border border-white/10 bg-white/5 text-center">
+                         <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                         <p className="text-gray-400 text-sm">Processing documents and generating summaries...</p>
+                       </div>
+                     );
+                  }
+                  
+                  return summaries.map(f => (
+                    <div key={f.file_id} className="p-5 rounded-xl border border-white/10 bg-white/[0.03] space-y-3 shadow-lg">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold text-gray-200">{f.ai_title || f.filename}</h3>
+                        <Badge variant="outline" className="border-green-500/30 text-green-400 bg-green-500/10">Analyzed</Badge>
+                      </div>
+                      <div className="prose prose-invert prose-sm max-w-none text-[13px] leading-relaxed text-gray-300">
+                         <ReactMarkdown>{f.doc_summary}</ReactMarkdown>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            )}
           </div>
         ) : (
           <>
