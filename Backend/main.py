@@ -322,6 +322,7 @@ async def notify_uploaded(req: UploadNotificationRequest, request: Request):
         "original_filename": req.original_filename,
         "content_type": req.content_type,
         "file_size": req.file_size,
+        "gcs_path": req.gcs_path,
         "uploaded_at": get_utc_timestamp(),
         "updated_at": get_utc_timestamp(),
         "processing_status": "pending",
