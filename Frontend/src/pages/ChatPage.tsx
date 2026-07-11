@@ -5,7 +5,7 @@ import { SourcesPanel } from "@/components/chat/SourcesPanel";
 import { ChatSection } from "@/components/chat/ChatSection";
 import { InsightsPanel } from "@/components/chat/InsightsPanel";
 import { UploadModal } from "@/components/chat/UploadModal";
-import { useFiles, useUploadFile } from "@/hooks/api";
+import { useFiles, useUploadFile, useChatStatus } from "@/hooks/api";
 import { useToast } from "@/hooks/use-toast";
 import { Clock, Server, Zap, CheckCircle, AlertCircle, FileText, User as UserIcon, LogOut, ArrowLeft } from "lucide-react";
 import { logout } from "@/lib/firebase";
@@ -21,180 +21,6 @@ interface UploadedFile {
   uploadedAt: Date;
 }
 
-const StartupGuide = ({ backendUrl }: { backendUrl: string }) => {
-  const [backendStatus, setBackendStatus] = useState<'checking' | 'starting' | 'ready' | 'error'>('checking');
-  const [elapsedTime, setElapsedTime] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setElapsedTime(prev => prev + 1);
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    const checkBackendStatus = async () => {
-      try {
-        const response = await fetch(`${backendUrl}/health`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        
-        if (response.ok) {
-          setBackendStatus('ready');
-        } else {
-          setBackendStatus('starting');
-        }
-      } catch (error) {
-        setBackendStatus('starting');
-      }
-    };
-
-    // Initial check
-    checkBackendStatus();
-
-    // Check every 5 seconds
-    const interval = setInterval(checkBackendStatus, 5000);
-
-    return () => clearInterval(interval);
-  }, [backendUrl]);
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const getStatusIcon = () => {
-    switch (backendStatus) {
-      case 'checking':
-        return <Clock className="w-6 h-6 text-blue-500 animate-pulse" />;
-      case 'starting':
-        return <Server className="w-6 h-6 text-orange-500 animate-spin" />;
-      case 'ready':
-        return <CheckCircle className="w-6 h-6 text-green-500" />;
-      case 'error':
-        return <AlertCircle className="w-6 h-6 text-red-500" />;
-      default:
-        return <Clock className="w-6 h-6 text-blue-500" />;
-    }
-  };
-
-  const getStatusMessage = () => {
-    switch (backendStatus) {
-      case 'checking':
-        return 'Checking backend server status...';
-      case 'starting':
-        return 'Backend server is starting up...';
-      case 'ready':
-        return 'Backend server is ready!';
-      case 'error':
-        return 'Having trouble connecting to the backend server';
-      default:
-        return 'Initializing...';
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center p-4 font-sans">
-      <div className="max-w-2xl w-full bg-gray-800/40 backdrop-blur-lg rounded-2xl border border-gray-700/50 shadow-2xl p-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-4">
-            <Zap className="w-8 h-8 text-blue-400 mr-2" />
-            <h1 className="text-3xl font-bold text-white">Legal AI Assistant</h1>
-          </div>
-          <p className="text-gray-300 text-lg">Getting everything ready for you...</p>
-        </div>
-
-        {/* Status Section */}
-        <div className="bg-gray-800/50 rounded-xl p-6 mb-6 border border-gray-700/30">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              {getStatusIcon()}
-              <span className="text-white font-medium">{getStatusMessage()}</span>
-            </div>
-            <div className="text-gray-400 font-mono text-sm">
-              {formatTime(elapsedTime)}
-            </div>
-          </div>
-          
-          {/* Progress Bar */}
-          <div className="w-full bg-gray-700/50 rounded-full h-2 mb-4">
-            <div 
-              className={`h-2 rounded-full transition-all duration-500 ${
-                backendStatus === 'ready' 
-                  ? 'bg-green-500 w-full' 
-                  : 'bg-blue-500 w-1/2 animate-pulse'
-              }`}
-            />
-          </div>
-
-          {backendStatus === 'ready' && (
-            <div className="text-center">
-              <p className="text-green-400 font-medium">🎉 All systems ready! Redirecting...</p>
-            </div>
-          )}
-        </div>
-
-        {/* Information Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div className="bg-gray-800/40 rounded-lg p-4 border border-gray-700/40">
-            <h3 className="text-white font-semibold mb-2 flex items-center">
-              <Server className="w-4 h-4 mr-2 text-blue-400" />
-              Backend Hosting
-            </h3>
-            <p className="text-gray-300 text-sm">
-              We're using free hosting for our backend services. This means the server goes to sleep when not in use to save resources.
-            </p>
-          </div>
-
-          <div className="bg-gray-800/40 rounded-lg p-4 border border-gray-700/40">
-            <h3 className="text-white font-semibold mb-2 flex items-center">
-              <Clock className="w-4 h-4 mr-2 text-blue-400" />
-              Startup Time
-            </h3>
-            <p className="text-gray-300 text-sm">
-              The first request may take 30-60 seconds as the server wakes up and initializes all services.
-            </p>
-          </div>
-        </div>
-
-        {/* What's Happening Section */}
-        <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/30">
-          <h3 className="text-white font-semibold mb-4 text-center">What's happening behind the scenes?</h3>
-          <div className="space-y-3">
-            <div className="flex items-center space-x-3">
-              <div className={`w-3 h-3 rounded-full ${backendStatus !== 'checking' ? 'bg-green-500' : 'bg-blue-500 animate-pulse'}`} />
-              <span className="text-gray-300 text-sm">Waking up the backend server</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className={`w-3 h-3 rounded-full ${backendStatus === 'ready' ? 'bg-green-500' : backendStatus === 'starting' ? 'bg-blue-500 animate-pulse' : 'bg-gray-600'}`} />
-              <span className="text-gray-300 text-sm">Loading AI models and dependencies</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className={`w-3 h-3 rounded-full ${backendStatus === 'ready' ? 'bg-green-500' : 'bg-gray-600'}`} />
-              <span className="text-gray-300 text-sm">Preparing your document analysis environment</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="text-center mt-6">
-          <p className="text-gray-400 text-sm">
-            Thank you for your patience! This one-time setup ensures optimal performance.
-          </p>
-          {backendStatus === 'starting' && (
-            <p className="text-blue-400 text-xs mt-2 animate-pulse">
-              Average wait time: 45 seconds • Server URL: {backendUrl}
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const ChatPage = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -208,13 +34,13 @@ const ChatPage = () => {
   const [showInsightsDesktop, setShowInsightsDesktop] = useState(true);
   const [showSourcesMobile, setShowSourcesMobile] = useState(false);
   const [showInsightsMobile, setShowInsightsMobile] = useState(false);
+  const [processingFiles, setProcessingFiles] = useState<string[]>([]);
 
-  const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
   const { toast } = useToast();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { notebookId } = useParams<{ notebookId: string }>();
+  const { chatId } = useParams<{ chatId: string }>();
   const [searchParams] = useSearchParams();
 
   const handleLogout = async () => {
@@ -233,13 +59,30 @@ const ChatPage = () => {
     }
   }, [user, loading, navigate]);
 
-  const { data: filesData, isLoading, error, refetch } = useFiles({ notebook_id: notebookId });
+  const { data: filesData, isLoading, error, refetch } = useFiles({ chat_id: chatId });
   const uploadMutation = useUploadFile();
+  const { data: statusData } = useChatStatus(chatId || null);
+
+  useEffect(() => {
+    if (statusData?.all_processed && processingFiles.length > 0) {
+      sonnerToast.success("All documents processed! Ready to chat 🎉");
+      setProcessingFiles([]);
+      refetch(); // Refresh to get the AI generated title/summary
+    } else if (statusData && !statusData.all_processed) {
+      const currentlyProcessing = statusData.files.filter(f => f.processing_status === 'pending' || f.processing_status === 'processing').map(f => f.file_id);
+      if (currentlyProcessing.length > 0 && processingFiles.length === 0) {
+        sonnerToast("Processing documents... This usually takes ~20 seconds.");
+        setProcessingFiles(currentlyProcessing);
+      }
+    }
+  }, [statusData, processingFiles.length, refetch]);
 
   useEffect(() => {
     if (location.state?.activeFileId) {
       setActiveFileId(location.state.activeFileId);
-      setSelectedFiles([location.state.activeFileId]);
+      if (!selectedFiles.includes(location.state.activeFileId)) {
+        setSelectedFiles(prev => [...prev, location.state.activeFileId]);
+      }
     }
   }, [location.state]);
 
@@ -250,13 +93,15 @@ const ChatPage = () => {
       size: file.file_size,
       type: file.content_type,
       uploadedAt: new Date(file.uploaded_at),
+      status: file.processing_status
     })) || [];
 
   useEffect(() => {
-    if (!isLoading && uploadedFiles.length === 0) {
+    if (!isLoading && uploadedFiles.length === 0 && !searchParams.get('new')) {
+      // It's empty, but not marked new? Just show the modal to be safe
       setShowUploadModal(true);
     }
-  }, [isLoading, uploadedFiles.length]);
+  }, [isLoading, uploadedFiles.length, searchParams]);
 
   useEffect(() => {
     if (error) {
@@ -273,7 +118,7 @@ const ChatPage = () => {
     if (isNew || location.state?.newNotebook) {
       setShowUploadModal(true);
       // Clean up the state properly using React Router
-      navigate(`/notebook/${notebookId}`, { replace: true, state: {} });
+      navigate(`/chat/${chatId}`, { replace: true, state: {} });
       return;
     }
     if (!activeFileId && !location.state?.activeFileId) {
@@ -287,15 +132,17 @@ const ChatPage = () => {
         setActiveDocument(activeFile.name);
       }
     }
-  }, [uploadedFiles, selectedFiles.length, activeFileId, location.state, searchParams, navigate, notebookId]);
+  }, [uploadedFiles, selectedFiles.length, activeFileId, location.state, searchParams, navigate, chatId]);
 
   const handleFilesUploaded = async (files: File[]) => {
     try {
       let lastUploadedId = null;
+      let newFileIds: string[] = [];
       for (const file of files) {
-        const resp = await uploadMutation.mutateAsync({ file, notebookId });
+        const resp = await uploadMutation.mutateAsync({ file, chatId });
         if (resp && resp.file_id) {
             lastUploadedId = resp.file_id;
+            newFileIds.push(resp.file_id);
         }
       }
       await refetch();
@@ -303,7 +150,7 @@ const ChatPage = () => {
       
       if (lastUploadedId) {
           setActiveFileId(lastUploadedId);
-          setSelectedFiles([lastUploadedId]);
+          setSelectedFiles(prev => [...new Set([...prev, ...newFileIds])]);
       }
     } catch (err) {
       console.error("Upload failed:", err);
@@ -330,8 +177,17 @@ const ChatPage = () => {
     setConversationId(newConversationId);
   };
 
-  if (isLoading) {
-    return <StartupGuide backendUrl={backendUrl} />;
+  if (isLoading && uploadedFiles.length === 0) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-background">
+         <div className="animate-pulse flex flex-col items-center">
+            <div className="w-8 h-8 rounded bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center mb-4">
+               <FileText className="w-4 h-4 text-white" />
+            </div>
+            <p className="text-gray-400">Loading chat...</p>
+         </div>
+      </div>
+    );
   }
 
   return (
@@ -448,6 +304,8 @@ const ChatPage = () => {
             activeDocument={activeDocument}
             hasDocuments={uploadedFiles.length > 0}
             activeFileId={activeFileId}
+            selectedFileIds={selectedFiles} // added support for multi-doc
+            chatId={chatId}
             onConversationIdChange={handleConversationIdChange}
             showSourcesDesktop={showSourcesDesktop}
             setShowSourcesDesktop={setShowSourcesDesktop}

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { Badge } from "@/components/ui/badge";
 import ReactMarkdown from 'react-markdown';
 import { Send, Mic, Bot as BotIcon, User, Sidebar, Activity } from "lucide-react";
-import { useChat, useConversation } from "@/hooks/api";
+import { useChat, useConversationByChat } from "@/hooks/api";
 
 const Spline = lazy(() => import("@splinetool/react-spline"));
 
@@ -18,6 +18,8 @@ interface ChatSectionProps {
   activeDocument: string | null;
   hasDocuments: boolean;
   activeFileId?: string | null;
+  selectedFileIds?: string[]; // for multi-doc
+  chatId?: string; // chat context
   onConversationIdChange?: (conversationId: string) => void;
   showSourcesDesktop?: boolean;
   setShowSourcesDesktop?: (v: boolean) => void;
@@ -43,6 +45,8 @@ export const ChatSection = ({
   activeDocument,
   hasDocuments,
   activeFileId,
+  selectedFileIds = [],
+  chatId,
   onConversationIdChange,
   showSourcesDesktop = true,
   setShowSourcesDesktop,
@@ -60,7 +64,7 @@ export const ChatSection = ({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chatMutation = useChat();
-  const conversationQuery = useConversation(activeFileId || null);
+  const conversationQuery = useConversationByChat(chatId || null);
 
   useEffect(() => {
     if (conversationQuery.data && !conversationQuery.isLoading) {
@@ -75,11 +79,11 @@ export const ChatSection = ({
         conversation_id: conversationQuery.data.conversation_id,
       }));
       setInternalMessages(history);
-    } else if (activeFileId && !conversationQuery.isLoading && !conversationQuery.data?.messages?.length) {
+    } else if (chatId && !conversationQuery.isLoading && !conversationQuery.data?.messages?.length) {
        setInternalMessages([]);
        setConversationId(null);
     }
-  }, [conversationQuery.data, activeFileId, conversationQuery.isLoading]);
+  }, [conversationQuery.data, chatId, conversationQuery.isLoading]);
 
   const messages = messagesProp ?? internalMessages;
   const inputText = inputTextProp ?? internalInputText;
@@ -108,7 +112,8 @@ export const ChatSection = ({
     try {
       const response = await chatMutation.mutateAsync({
         message: text.trim(),
-        file_id: activeFileId || undefined,
+        file_ids: selectedFileIds.length > 0 ? selectedFileIds : (activeFileId ? [activeFileId] : undefined),
+        chat_id: chatId,
         conversation_id: conversationId || undefined,
       });
       if (!conversationId && response?.conversation_id) {
@@ -143,7 +148,7 @@ export const ChatSection = ({
 
   const handleSuggested = (q: string) => sendMessage(q);
 
-  const titleDisplay = activeDocument ? activeDocument.replace(/\.pdf$/i, "") : "Document Analysis";
+  const titleDisplay = (selectedFileIds.length > 1) ? `Chat with ${selectedFileIds.length} documents` : (activeDocument ? activeDocument.replace(/\.pdf$/i, "") : "Document Analysis");
 
   return (
     // MODIFICATION: Removed 'mt-16 md:mt-0'
@@ -190,7 +195,8 @@ export const ChatSection = ({
           </div>
           <div className="min-w-0">
             <div className="title truncate">{titleDisplay}</div>
-            {activeDocument && <div className="subtitle">{activeDocument}</div>}
+            {selectedFileIds.length > 1 && <div className="subtitle">Multiple documents selected</div>}
+            {selectedFileIds.length === 1 && activeDocument && <div className="subtitle">{activeDocument}</div>}
           </div>
         </div>
 
@@ -214,7 +220,7 @@ export const ChatSection = ({
 
       {/* Scrollable Messages - This is 'flex: 1' and 'overflow-y: auto' from the CSS */}
       <div className="messages flex-1" ref={containerRef}>
-        {!activeFileId || messages.length === 0 ? (
+        {!hasDocuments || messages.length === 0 ? (
           <div className="flex flex-col items-center gap-4">
             <div className="w-full max-w-[700px] h-[300px] rounded-lg border border-white/10 overflow-hidden">
               <Suspense fallback={<div className="h-full grid place-items-center">Loading 3D…</div>}>

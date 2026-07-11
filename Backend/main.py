@@ -140,7 +140,8 @@ class UploadNotificationRequest(BaseModel):
     original_filename: str
     file_size: int
     content_type: str
-    notebook_id: Optional[str] = None
+    chat_id: Optional[str] = None  # renamed from notebook_id
+    notebook_id: Optional[str] = None  # keep for backward compat
 
 class NotebookCreateRequest(BaseModel):
     title: str
@@ -158,9 +159,14 @@ class InsightRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
-    file_id: Optional[str] = None
+    file_id: Optional[str] = None          # legacy single-doc (still accepted)
+    file_ids: Optional[List[str]] = None   # multi-doc list (preferred)
     conversation_id: Optional[str] = None
+    chat_id: Optional[str] = None
     stream: bool = False
+
+class ChatCreateRequest(BaseModel):
+    title: Optional[str] = None
 
 class ExportConversationRequest(BaseModel):
     conversation_id: str
@@ -172,12 +178,12 @@ jobs_data: Dict[str, Dict[str, Any]] = {}
 insights_data: Dict[str, Dict[str, Any]] = {}
 conversations_data: Dict[str, Dict[str, Any]] = {}
 signed_urls_data: Dict[str, Any] = {}
-notebooks_data: Dict[str, Dict[str, Any]] = {}
+chats_data: Dict[str, Dict[str, Any]] = {}  # renamed from notebooks_data
 
 DB_FILE = "legalmind_db.json"
 
 def load_db():
-    global files_data, jobs_data, insights_data, conversations_data
+    global files_data, jobs_data, insights_data, conversations_data, chats_data
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r") as f:
@@ -186,8 +192,9 @@ def load_db():
                 jobs_data.update(data.get("jobs", {}))
                 insights_data.update(data.get("insights", {}))
                 conversations_data.update(data.get("conversations", {}))
-                notebooks_data.update(data.get("notebooks", {}))
-            logger.info(f" Loaded database from {DB_FILE} with {len(files_data)} files and {len(notebooks_data)} notebooks")
+                # Support both old 'notebooks' key and new 'chats' key
+                chats_data.update(data.get("chats", data.get("notebooks", {})))
+            logger.info(f" Loaded database from {DB_FILE} with {len(files_data)} files and {len(chats_data)} chats")
         except Exception as e:
             logger.error(f"Error loading DB: {e}")
 
@@ -199,7 +206,7 @@ def save_db():
                 "jobs": jobs_data,
                 "insights": insights_data,
                 "conversations": conversations_data,
-                "notebooks": notebooks_data
+                "chats": chats_data
             }, f, default=str)
     except Exception as e:
         logger.error(f"Error saving DB: {e}")
@@ -276,8 +283,10 @@ from fastapi import File, UploadFile
 from google.cloud import storage
 
 @app.post("/api/uploads/direct")
-async def upload_direct(file: UploadFile = File(...), notebook_id: Optional[str] = None):
+async def upload_direct(file: UploadFile = File(...), chat_id: Optional[str] = None, notebook_id: Optional[str] = None):
     try:
+        # Support both chat_id (new) and notebook_id (legacy)
+        effective_chat_id = chat_id or notebook_id
         file_id = generate_id("file")
         filename = file.filename
         object_key = f"uploads/{file_id}/{filename}"
@@ -308,7 +317,7 @@ async def upload_direct(file: UploadFile = File(...), notebook_id: Optional[str]
             "content_type": file.content_type,
             "size": len(content),
             "processing_started": True,
-            "notebook_id": notebook_id
+            "chat_id": effective_chat_id
         }
     except Exception as e:
         logger.error(f"Direct upload failed: {e}")
@@ -317,6 +326,8 @@ async def upload_direct(file: UploadFile = File(...), notebook_id: Optional[str]
 @app.post("/api/uploads/notify-uploaded")
 async def notify_uploaded(req: UploadNotificationRequest, request: Request):
     user_id = request.headers.get("X-User-ID", "anonymous")
+    # Support both chat_id (new) and notebook_id (legacy)
+    effective_chat_id = req.chat_id or req.notebook_id
     files_data[req.file_id] = {
         "file_id": req.file_id,
         "original_filename": req.original_filename,
@@ -326,12 +337,22 @@ async def notify_uploaded(req: UploadNotificationRequest, request: Request):
         "uploaded_at": get_utc_timestamp(),
         "updated_at": get_utc_timestamp(),
         "processing_status": "pending",
-        "notebook_id": req.notebook_id,
+        "chat_id": effective_chat_id,
+        "notebook_id": effective_chat_id,  # backward compat
         "metadata": {
             "page_count": 0
         },
         "user_id": user_id
     }
+
+    # Add file to chat's document list
+    if effective_chat_id and effective_chat_id in chats_data:
+        chat = chats_data[effective_chat_id]
+        if "document_ids" not in chat:
+            chat["document_ids"] = []
+        if req.file_id not in chat["document_ids"]:
+            chat["document_ids"].append(req.file_id)
+        chat["updated_at"] = get_utc_timestamp()
 
     job_id = f"job_{uuid.uuid4().hex[:8]}"
     jobs_data[job_id] = {
@@ -419,6 +440,58 @@ async def process_file_job(file_id: str, job_id: str):
         jobs_data[job_id]["updated_at"] = get_utc_timestamp()
         logger.info(f" [JOB DONE] file_id={file_id} job_id={job_id}")
 
+        # 5) Auto-generate document summary and chat title via Gemini
+        try:
+            text_sample = extraction.get("full_text", "")[:4000]
+            filename = files_data[file_id].get("original_filename", "document")
+            api_key = os.getenv("GOOGLE_API_KEY", "")
+            if api_key and text_sample.strip():
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                prompt = (
+                    f"You are a legal document assistant. Analyze this document excerpt and provide:\n"
+                    f"1. A SHORT TITLE (5-8 words max) for a chat session about this document\n"
+                    f"2. A BRIEF SUMMARY (50-60 words) of what this document is about\n\n"
+                    f"Document filename: {filename}\n"
+                    f"Document text excerpt:\n{text_sample}\n\n"
+                    f"Respond in this exact JSON format:\n"
+                    f'{{\"title\": \"...\", \"summary\": \"...\"}}'
+                )
+                resp = await asyncio.to_thread(lambda: model.generate_content(prompt))
+                resp_text = resp.text.strip()
+                # Parse JSON
+                import re
+                json_match = re.search(r'\{[^{}]+\}', resp_text, re.DOTALL)
+                if json_match:
+                    ai_result = json.loads(json_match.group())
+                    doc_summary = ai_result.get("summary", "")
+                    chat_title = ai_result.get("title", filename)
+                    files_data[file_id]["analysis"]["summary"] = doc_summary
+                    files_data[file_id]["doc_summary"] = doc_summary
+                    files_data[file_id]["ai_title"] = chat_title
+                    # Update the parent chat's title and summary
+                    chat_id = files_data[file_id].get("chat_id")
+                    if chat_id and chat_id in chats_data:
+                        chat = chats_data[chat_id]
+                        # Only set title if it's still the default
+                        if not chat.get("title") or chat["title"] == "New Chat":
+                            chat["title"] = chat_title
+                        # Always append/update the doc summary in chat
+                        if "doc_summaries" not in chat:
+                            chat["doc_summaries"] = {}
+                        chat["doc_summaries"][file_id] = {
+                            "filename": filename,
+                            "summary": doc_summary,
+                            "title": chat_title,
+                        }
+                        chat["updated_at"] = get_utc_timestamp()
+                    logger.info(f" [AI] Auto-title='{chat_title}', summary generated ({len(doc_summary)} chars)")
+        except Exception as e:
+            logger.warning(f" [AI] Auto-title/summary generation failed (non-fatal): {e}")
+
+        save_db()
+
     except Exception as e:
         error_msg = str(e)
         logger.error(f"💥 [JOB FAILED] file_id={file_id}: {error_msg}")
@@ -428,6 +501,7 @@ async def process_file_job(file_id: str, job_id: str):
         jobs_data[job_id]["status"] = "failed"
         jobs_data[job_id]["error"] = error_msg
         jobs_data[job_id]["updated_at"] = get_utc_timestamp()
+
 
 async def download_file_from_gcs_real(gcs_path: str) -> str:
     """Download a file from GCS using the SAME service account as Document AI."""
@@ -535,9 +609,11 @@ async def list_user_files(
     offset: int = Query(0, ge=0),
     status: Optional[str] = Query(None, description="Filter by status"),
     file_type: Optional[str] = Query(None, description="Filter by file type"),
-    notebook_id: Optional[str] = Query(None, description="Filter by notebook ID")
+    chat_id: Optional[str] = Query(None, description="Filter by chat ID"),
+    notebook_id: Optional[str] = Query(None, description="Filter by notebook ID (legacy)"),
 ):
     user_id = request.headers.get("X-User-ID")
+    effective_chat_id = chat_id or notebook_id
     try:
         all_files = list(files_data.values())
         if user_id:
@@ -546,8 +622,8 @@ async def list_user_files(
             all_files = [f for f in all_files if f.get("processing_status") == status]
         if file_type:
             all_files = [f for f in all_files if f.get("metadata", {}).get("file_type") == file_type]
-        if notebook_id:
-            all_files = [f for f in all_files if f.get("notebook_id") == notebook_id]
+        if effective_chat_id:
+            all_files = [f for f in all_files if f.get("chat_id") == effective_chat_id or f.get("notebook_id") == effective_chat_id]
         all_files.sort(key=lambda x: x.get("uploaded_at", ""), reverse=True)
         paginated_files = all_files[offset:offset + limit]
 
@@ -1133,7 +1209,6 @@ real_download_url: {https_url}
 # ================================
 # CHAT
 # ================================
-# --- REPLACE the whole /api/chat route with this ---
 @app.post("/api/chat")
 async def sync_chat(request: ChatRequest):
     try:
@@ -1145,55 +1220,81 @@ async def sync_chat(request: ChatRequest):
                 "created_at": get_utc_timestamp(),
                 "messages": [],
                 "file_id": request.file_id,
+                "chat_id": request.chat_id,
                 "context": {}
             }
 
         conversation = conversations_data[conversation_id]
 
-        # ---- Build file_context with actual document text ----
+        # ---- Resolve file_ids (support both single file_id and list file_ids) ----
+        effective_file_ids: List[str] = []
+        if request.file_ids:
+            effective_file_ids = request.file_ids
+        elif request.file_id:
+            effective_file_ids = [request.file_id]
+
+        # ---- Build multi-doc file_context ----
         file_context: Dict[str, Any] = {}
-        if request.file_id:
-            if request.file_id not in files_data:
-                raise HTTPException(status_code=400, detail="Unknown file_id")
+        if effective_file_ids:
+            all_texts = []
+            all_filenames = []
+            still_processing = []
+            not_found = []
 
-            fd = files_data[request.file_id]
+            for fid in effective_file_ids:
+                if fid not in files_data:
+                    not_found.append(fid)
+                    continue
 
-            analysis = fd.get("analysis", {}) or {}
-            chunks = fd.get("chunks", []) or []
+                fd = files_data[fid]
+                status = fd.get("processing_status", "pending")
 
-            # Prefer chunk body; fallback only to analysis.full_text that we produced earlier
-            def _chunk_texts():
-                out = []
-                for c in chunks:
-                    txt = c.get("content") or c.get("text") or ""
-                    if txt:
-                        out.append(txt)
-                return out
+                if status in ("pending", "processing"):
+                    still_processing.append(fd.get("original_filename", fid))
+                    continue
+                elif status == "failed":
+                    continue  # skip failed docs silently
 
-            combined = "\n\n".join(_chunk_texts())
-            if not combined:
-                combined = analysis.get("full_text", "") or ""
+                chunks = fd.get("chunks", []) or []
+                analysis = fd.get("analysis", {}) or {}
 
-            if not combined.strip():
-                raise HTTPException(status_code=409, detail="No extracted text available for chat. Ensure DocAI and chunking finished successfully.")
+                def _chunk_texts_for(c_list):
+                    return [c.get("content") or c.get("text") or "" for c in c_list if c.get("content") or c.get("text")]
 
-            safe_text = clean_text_for_gemini(combined)
+                combined = "\n\n".join(_chunk_texts_for(chunks))
+                if not combined:
+                    combined = analysis.get("full_text", "") or ""
 
-            file_context = {
-                "filename": fd.get("original_filename"),
-                "file_type": fd.get("metadata", {}).get("file_type"),
-                "analysis": analysis,
-                "document_text": safe_text,
-                "chunks_meta": [
-                    {
-                        "index": i,
-                        "page_start": c.get("page_start"),
-                        "page_end": c.get("page_end"),
-                        "char_count": len((c.get("content") or c.get("text") or "")),
-                    }
-                    for i, c in enumerate(chunks)
-                ],
-            }
+                if combined.strip():
+                    doc_label = f"[Document: {fd.get('original_filename', fid)}]"
+                    all_texts.append(f"{doc_label}\n{combined}")
+                    all_filenames.append(fd.get("original_filename", fid))
+
+            # Friendly error if docs still processing
+            if still_processing and not all_texts:
+                raise HTTPException(
+                    status_code=425,
+                    detail=f"Document(s) still processing: {', '.join(still_processing)}. Please wait a moment and try again."
+                )
+
+            if not all_texts and effective_file_ids:
+                raise HTTPException(
+                    status_code=409,
+                    detail="No extracted text available for chat. Ensure document processing finished successfully."
+                )
+
+            if all_texts:
+                safe_text = clean_text_for_gemini("\n\n---\n\n".join(all_texts))
+                file_context = {
+                    "filename": ", ".join(all_filenames),
+                    "file_type": "legal_document",
+                    "analysis": {},
+                    "document_text": safe_text,
+                    "document_count": len(all_texts),
+                    "filenames": all_filenames,
+                }
+                if still_processing:
+                    file_context["partial_note"] = f"Note: {len(still_processing)} document(s) still processing were excluded."
 
         # ---- STRICT: require chat_handler service ----
         if 'chat_handler' not in available_services:
@@ -1208,7 +1309,7 @@ async def sync_chat(request: ChatRequest):
             "role": "user",
             "content": request.message,
             "timestamp": get_utc_timestamp(),
-            "file_id": request.file_id
+            "file_ids": effective_file_ids
         }
         assistant_message = {
             "message_id": generate_id("msg"),
@@ -1221,6 +1322,8 @@ async def sync_chat(request: ChatRequest):
 
         conversation["messages"].extend([user_message, assistant_message])
         conversation["last_activity"] = get_utc_timestamp()
+        if request.chat_id:
+            conversation["chat_id"] = request.chat_id
 
         return {
             "conversation_id": conversation_id,
@@ -1237,6 +1340,7 @@ async def sync_chat(request: ChatRequest):
         }
     except HTTPException:
         raise
+
     except Exception as e:
         logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=f"Chat processing failed: {e}")
@@ -1516,58 +1620,164 @@ def debug_imports():
     return {"imports": errors}
 
 # ================================
-# NOTEBOOKS
+# CHATS (replaces NOTEBOOKS)
 # ================================
-@app.post("/api/notebooks")
-async def create_notebook(request: Request, body: NotebookCreateRequest):
-    user_id = request.headers.get("X-User-ID")
-    if not user_id:
-        user_id = "user_123"  # Mock default
-    
-    notebook_id = generate_id("notebook")
-    notebook = {
-        "id": notebook_id,
+@app.post("/api/chats")
+async def create_chat(request: Request, body: ChatCreateRequest):
+    user_id = request.headers.get("X-User-ID", "user_123")
+    chat_id = generate_id("chat")
+    chat = {
+        "id": chat_id,
         "user_id": user_id,
-        "title": body.title,
-        "description": body.description,
+        "title": body.title or "New Chat",
+        "document_ids": [],
+        "doc_summaries": {},
         "created_at": get_utc_timestamp(),
         "updated_at": get_utc_timestamp(),
     }
-    notebooks_data[notebook_id] = notebook
+    chats_data[chat_id] = chat
     save_db()
-    
-    return notebook
+    return chat
+
+@app.get("/api/chats")
+async def list_chats(request: Request):
+    user_id = request.headers.get("X-User-ID", "user_123")
+    user_chats = [c for c in chats_data.values() if c.get("user_id") == user_id]
+    user_chats.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+    for c in user_chats:
+        c["document_count"] = len([f for f in files_data.values()
+                                    if f.get("chat_id") == c["id"] or f.get("notebook_id") == c["id"]])
+    return {"chats": user_chats}
+
+@app.get("/api/chats/{chat_id}")
+async def get_chat(chat_id: str, request: Request):
+    if chat_id not in chats_data:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    chat = dict(chats_data[chat_id])
+    chat["document_count"] = len([f for f in files_data.values()
+                                    if f.get("chat_id") == chat_id or f.get("notebook_id") == chat_id])
+    return chat
+
+@app.patch("/api/chats/{chat_id}")
+async def update_chat(chat_id: str, request: Request):
+    if chat_id not in chats_data:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    body = await request.json()
+    if "title" in body:
+        chats_data[chat_id]["title"] = body["title"]
+    chats_data[chat_id]["updated_at"] = get_utc_timestamp()
+    save_db()
+    return chats_data[chat_id]
+
+@app.delete("/api/chats/{chat_id}")
+async def delete_chat(chat_id: str, request: Request):
+    if chat_id not in chats_data:
+        return {"success": True}
+
+    # Delete associated GCS files
+    files_to_delete = [f_id for f_id, f in files_data.items()
+                        if f.get("chat_id") == chat_id or f.get("notebook_id") == chat_id]
+
+    for f_id in files_to_delete:
+        fd = files_data[f_id]
+        gcs_path = fd.get("gcs_path", "")
+        if gcs_path.startswith("gs://"):
+            try:
+                creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+                if creds_path and os.path.exists(creds_path):
+                    from google.oauth2 import service_account as sa
+                    creds = sa.Credentials.from_service_account_file(creds_path)
+                    sc = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT, credentials=creds)
+                else:
+                    sc = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT)
+                without = gcs_path[5:]
+                bucket_name, _, object_key = without.partition("/")
+                bucket = sc.bucket(bucket_name)
+                blob = bucket.blob(object_key)
+                if blob.exists(sc):
+                    blob.delete()
+                    logger.info(f" Deleted GCS object: {gcs_path}")
+            except Exception as e:
+                logger.warning(f" GCS delete failed for {gcs_path}: {e}")
+        del files_data[f_id]
+
+    del chats_data[chat_id]
+    save_db()
+    return {"success": True}
+
+@app.get("/api/chats/{chat_id}/status")
+async def get_chat_status(chat_id: str):
+    """Returns processing status for all files in this chat."""
+    chat_files = [f for f in files_data.values()
+                  if f.get("chat_id") == chat_id or f.get("notebook_id") == chat_id]
+    statuses = []
+    for f in chat_files:
+        statuses.append({
+            "file_id": f["file_id"],
+            "filename": f.get("original_filename", ""),
+            "processing_status": f.get("processing_status", "pending"),
+            "error": f.get("error"),
+            "doc_summary": f.get("doc_summary", ""),
+            "ai_title": f.get("ai_title", ""),
+        })
+    all_done = all(s["processing_status"] == "completed" for s in statuses) if statuses else False
+    any_failed = any(s["processing_status"] == "failed" for s in statuses)
+    return {
+        "chat_id": chat_id,
+        "files": statuses,
+        "all_processed": all_done,
+        "any_failed": any_failed,
+        "total": len(statuses)
+    }
+
+@app.get("/api/conversations/chat/{chat_id}")
+async def get_conversations_by_chat(chat_id: str, request: Request):
+    """Returns the conversation history for a chat (all messages from any doc in this chat)."""
+    chat_convs = [c for c in conversations_data.values() if c.get("chat_id") == chat_id]
+    if not chat_convs:
+        return {"conversation_id": None, "messages": []}
+    chat_convs.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    conv = chat_convs[0]
+    return {
+        "conversation_id": conv.get("conversation_id"),
+        "messages": conv.get("messages", [])
+    }
+
+# Keep legacy notebook endpoints for backward compat (redirect to chats_data)
+@app.post("/api/notebooks")
+async def create_notebook_legacy(request: Request):
+    body = await request.json()
+    user_id = request.headers.get("X-User-ID", "user_123")
+    chat_id = generate_id("chat")
+    chat = {
+        "id": chat_id,
+        "user_id": user_id,
+        "title": body.get("title", "New Chat"),
+        "document_ids": [],
+        "doc_summaries": {},
+        "created_at": get_utc_timestamp(),
+        "updated_at": get_utc_timestamp(),
+    }
+    chats_data[chat_id] = chat
+    save_db()
+    return chat
 
 @app.get("/api/notebooks")
-async def list_notebooks(request: Request):
-    user_id = request.headers.get("X-User-ID")
-    if not user_id:
-        user_id = "user_123"
-        
-    user_notebooks = [n for n in notebooks_data.values() if n.get("user_id") == user_id]
-    user_notebooks.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
-    
-    # Calculate document counts
-    for nb in user_notebooks:
-        nb["document_count"] = len([f for f in files_data.values() if f.get("notebook_id") == nb["id"]])
-        
-    return {"notebooks": user_notebooks}
+async def list_notebooks_legacy(request: Request):
+    user_id = request.headers.get("X-User-ID", "user_123")
+    user_chats = [c for c in chats_data.values() if c.get("user_id") == user_id]
+    user_chats.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+    for c in user_chats:
+        c["document_count"] = len([f for f in files_data.values()
+                                    if f.get("chat_id") == c["id"] or f.get("notebook_id") == c["id"]])
+    return {"notebooks": user_chats}
 
 @app.get("/api/notebooks/{notebook_id}")
-async def get_notebook(notebook_id: str, request: Request):
-    if notebook_id not in notebooks_data:
-        raise HTTPException(status_code=404, detail="Notebook not found")
-    return notebooks_data[notebook_id]
+async def get_notebook_legacy(notebook_id: str, request: Request):
+    if notebook_id not in chats_data:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return chats_data[notebook_id]
 
 @app.delete("/api/notebooks/{notebook_id}")
-async def delete_notebook(notebook_id: str, request: Request):
-    if notebook_id in notebooks_data:
-        del notebooks_data[notebook_id]
-        
-        # Delete associated files
-        files_to_delete = [f_id for f_id, f in files_data.items() if f.get("notebook_id") == notebook_id]
-        for f_id in files_to_delete:
-            del files_data[f_id]
-            
-        save_db()
-    return {"success": True}
+async def delete_notebook_legacy(notebook_id: str, request: Request):
+    return await delete_chat(notebook_id, request)

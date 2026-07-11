@@ -20,15 +20,19 @@ export interface UploadNotificationResponse {
   estimated_processing_time?: string;
 }
 
-export interface Notebook {
+export interface Chat {
   id: string;
   user_id: string;
   title: string;
-  description?: string;
+  document_ids: string[];
+  doc_summaries: Record<string, { filename: string; summary: string; title: string }>;
   created_at: string;
   updated_at: string;
   document_count: number;
 }
+
+// Keep Notebook as alias for backward compat
+export type Notebook = Chat;
 
 export interface FileMetadata {
   file_id: string;
@@ -207,7 +211,8 @@ class ApiService {
     original_filename: string;
     file_size: number;
     content_type: string;
-    notebook_id?: string;
+    chat_id?: string;
+    notebook_id?: string; // backward compat
   }): Promise<UploadNotificationResponse> {
     return this.request<UploadNotificationResponse>('/api/uploads/notify-uploaded', {
       method: 'POST',
@@ -220,14 +225,17 @@ class ApiService {
     offset?: number;
     status?: string;
     file_type?: string;
-    notebook_id?: string;
+    chat_id?: string;
+    notebook_id?: string; // backward compat
   }) {
     const queryParams = new URLSearchParams();
     if (params?.limit) queryParams.set('limit', params.limit.toString());
     if (params?.offset) queryParams.set('offset', params.offset.toString());
     if (params?.status) queryParams.set('status', params.status);
     if (params?.file_type) queryParams.set('file_type', params.file_type);
-    if (params?.notebook_id) queryParams.set('notebook_id', params.notebook_id);
+    // prefer chat_id, fall back to notebook_id
+    const chatId = params?.chat_id || params?.notebook_id;
+    if (chatId) queryParams.set('chat_id', chatId);
 
     const query = queryParams.toString();
     const endpoint = `/api/uploads${query ? `?${query}` : ''}`;
@@ -391,7 +399,9 @@ class ApiService {
   async sendMessage(data: {
     message: string;
     file_id?: string;
+    file_ids?: string[];  // multi-doc
     conversation_id?: string;
+    chat_id?: string;
     stream?: boolean;
   }): Promise<ChatResponse> {
     return this.request<ChatResponse>('/api/chat', {
@@ -402,6 +412,27 @@ class ApiService {
 
   async getConversation(fileId: string): Promise<{ conversation_id: string | null; messages: any[] }> {
     return this.request<{ conversation_id: string | null; messages: any[] }>(`/api/conversations/file/${fileId}`);
+  }
+
+  async getConversationByChat(chatId: string): Promise<{ conversation_id: string | null; messages: any[] }> {
+    return this.request<{ conversation_id: string | null; messages: any[] }>(`/api/conversations/chat/${chatId}`);
+  }
+
+  async getChatStatus(chatId: string): Promise<{
+    chat_id: string;
+    files: Array<{
+      file_id: string;
+      filename: string;
+      processing_status: string;
+      error?: string;
+      doc_summary?: string;
+      ai_title?: string;
+    }>;
+    all_processed: boolean;
+    any_failed: boolean;
+    total: number;
+  }> {
+    return this.request(`/api/chats/${chatId}/status`);
   }
 
   // Export
@@ -449,7 +480,7 @@ class ApiService {
     return `${this.baseUrl}${endpoint}`;
   }
 
-  async uploadFile(file: File, notebookId?: string): Promise<{
+  async uploadFile(file: File, chatId?: string): Promise<{
     file_id: string;
     processing_started: boolean;
     job_id?: string;
@@ -458,8 +489,8 @@ class ApiService {
       const formData = new FormData();
       formData.append("file", file);
 
-      const endpoint = notebookId 
-          ? `/api/uploads/direct?notebook_id=${encodeURIComponent(notebookId)}`
+      const endpoint = chatId 
+          ? `/api/uploads/direct?chat_id=${encodeURIComponent(chatId)}`
           : '/api/uploads/direct';
           
       // 1) Direct upload to backend
@@ -469,6 +500,7 @@ class ApiService {
           filename: string;
           content_type: string;
           size: number;
+          chat_id?: string;
       }>(endpoint, {
           method: 'POST',
           body: formData,
@@ -481,7 +513,7 @@ class ApiService {
         original_filename: uploadResp.filename,
         file_size: uploadResp.size,
         content_type: uploadResp.content_type || "application/pdf",
-        notebook_id: notebookId,
+        chat_id: chatId,
       });
 
       return {
@@ -494,26 +526,50 @@ class ApiService {
     }
   }
   
-  // Notebooks
-  async createNotebook(title: string, description?: string): Promise<Notebook> {
-    return this.request<Notebook>('/api/notebooks', {
+  // Chats
+  async createChat(title?: string): Promise<Chat> {
+    return this.request<Chat>('/api/chats', {
       method: 'POST',
-      body: JSON.stringify({ title, description }),
+      body: JSON.stringify({ title: title || 'New Chat' }),
     });
   }
 
-  async listNotebooks(): Promise<{ notebooks: Notebook[] }> {
-    return this.request<{ notebooks: Notebook[] }>('/api/notebooks');
+  async listChats(): Promise<{ chats: Chat[] }> {
+    return this.request<{ chats: Chat[] }>('/api/chats');
   }
 
-  async getNotebook(notebookId: string): Promise<Notebook> {
-    return this.request<Notebook>(`/api/notebooks/${notebookId}`);
+  async getChat(chatId: string): Promise<Chat> {
+    return this.request<Chat>(`/api/chats/${chatId}`);
+  }
+
+  async updateChat(chatId: string, updates: { title?: string }): Promise<Chat> {
+    return this.request<Chat>(`/api/chats/${chatId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteChat(chatId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/chats/${chatId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Keep legacy notebook methods for backward compat
+  async createNotebook(title: string, description?: string): Promise<Chat> {
+    return this.createChat(title);
+  }
+
+  async listNotebooks(): Promise<{ notebooks: Chat[] }> {
+    return this.request<{ notebooks: Chat[] }>('/api/notebooks');
+  }
+
+  async getNotebook(notebookId: string): Promise<Chat> {
+    return this.getChat(notebookId);
   }
 
   async deleteNotebook(notebookId: string): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>(`/api/notebooks/${notebookId}`, {
-      method: 'DELETE',
-    });
+    return this.deleteChat(notebookId);
   }
 }
 

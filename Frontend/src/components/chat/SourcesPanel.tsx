@@ -12,6 +12,7 @@ interface UploadedFile {
   size: number;
   type: string;
   uploadedAt: Date;
+  status?: string;
 }
 
 interface SourcesPanelProps {
@@ -147,22 +148,25 @@ export const SourcesPanel = ({
             {uploadedFiles.map((file) => {
               const FileIcon = getFileIcon(file.type);
               const isSelected = selectedFiles.includes(file.id);
+              const isProcessing = file.status === 'pending' || file.status === 'processing';
+              const isFailed = file.status === 'failed';
 
               return (
                 <Card
                   key={file.id}
-                  className="p-4 cursor-pointer src-card"
+                  className={`p-4 src-card ${isProcessing ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                   style={{
                     borderColor: isSelected
                       ? "rgba(255,255,255,0.25)"
                       : "rgba(255,255,255,0.12)",
                   }}
-                  onClick={() => onFileClick(file)}
+                  onClick={() => !isProcessing && onFileClick(file)}
                 >
                   <div className="flex items-start gap-3">
                     <Checkbox
                       checked={isSelected}
-                      onCheckedChange={(checked) => onFileSelect(file.id, !!checked)}
+                      disabled={isProcessing}
+                      onCheckedChange={(checked) => !isProcessing && onFileSelect(file.id, !!checked)}
                       onClick={(e) => e.stopPropagation()}
                       className="mt-1"
                     />
@@ -184,7 +188,13 @@ export const SourcesPanel = ({
                       <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
                         <span>{formatFileSize(file.size)}</span>
                         <span>•</span>
-                        <span>{file.uploadedAt.toLocaleDateString()}</span>
+                        {isProcessing ? (
+                          <span className="text-yellow-500 animate-pulse">Processing...</span>
+                        ) : isFailed ? (
+                          <span className="text-red-500">Failed</span>
+                        ) : (
+                          <span className="text-green-500">Ready</span>
+                        )}
                       </div>
                     </div>
 

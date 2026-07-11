@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNotebooks, useCreateNotebook } from "@/hooks/api";
+import { useChats, useCreateChat } from "@/hooks/api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Plus, FileText, ArrowRight, Loader2, LogOut, User as UserIcon, ArrowLeft } from "lucide-react";
@@ -17,8 +17,8 @@ import {
 const DashboardPage = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
-  const { data: notebooksData, isLoading: notebooksLoading } = useNotebooks();
-  const createNotebook = useCreateNotebook();
+  const { data: chatsData, isLoading: chatsLoading } = useChats();
+  const createChat = useCreateChat();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -44,15 +44,12 @@ const DashboardPage = () => {
     );
   }
 
-  const notebooks = notebooksData?.notebooks || [];
+  const chats = chatsData?.chats || [];
 
-  const handleCreateNotebook = async () => {
+  const handleCreateChat = async () => {
     try {
-      const newNotebook = await createNotebook.mutateAsync({
-        title: "Untitled Notebook",
-        description: "New isolated workspace"
-      });
-      navigate(`/notebook/${newNotebook.id}?new=true`);
+      const newChat = await createChat.mutateAsync("New Chat");
+      navigate(`/chat/${newChat.id}?new=true`);
     } catch (e) {
       console.error(e);
     }
@@ -128,33 +125,33 @@ const DashboardPage = () => {
             <ArrowLeft className="h-4 w-4" />
             Go Back
           </Button>
-          <h1 className="text-3xl font-bold mb-2">My Notebooks</h1>
+          <h1 className="text-3xl font-bold mb-2">My Chats</h1>
           <p className="text-gray-400">Manage your legal documents and chat sessions.</p>
         </div>
 
-        {notebooksLoading ? (
+        {chatsLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {/* Create New Notebook Card */}
+            {/* Create New Chat Card */}
             <Card 
-              onClick={handleCreateNotebook}
+              onClick={handleCreateChat}
               className="group cursor-pointer border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20 transition-all duration-300 rounded-2xl h-56 flex flex-col items-center justify-center shadow-lg hover:shadow-xl hover:-translate-y-1"
             >
               <div className="w-14 h-14 rounded-full bg-blue-500/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-blue-500/20 transition-all">
                 <Plus className="w-6 h-6 text-blue-400" />
               </div>
-              <h3 className="font-medium text-lg">New Notebook</h3>
-              <p className="text-sm text-gray-500 mt-1">Create a new workspace</p>
+              <h3 className="font-medium text-lg">New Chat</h3>
+              <p className="text-sm text-gray-500 mt-1">Start a new session</p>
             </Card>
 
-            {/* Existing Notebooks */}
-            {notebooks.map((notebook: any) => (
+            {/* Existing Chats */}
+            {chats.map((chat: any) => (
               <Card 
-                key={notebook.id}
-                onClick={() => navigate(`/notebook/${notebook.id}`)}
+                key={chat.id}
+                onClick={() => navigate(`/chat/${chat.id}`)}
                 className="group cursor-pointer border border-white/10 bg-[#0A0A0A] hover:border-white/20 transition-all duration-300 rounded-2xl h-56 flex flex-col p-6 shadow-lg hover:shadow-xl hover:-translate-y-1 relative overflow-hidden"
               >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-full -mr-10 -mt-10 transition-all group-hover:bg-blue-500/10" />
@@ -167,10 +164,10 @@ const DashboardPage = () => {
 
                 <div className="relative z-10">
                   <h3 className="font-medium text-base line-clamp-2 mb-1 group-hover:text-blue-400 transition-colors">
-                    {notebook.title}
+                    {chat.title}
                   </h3>
                   <div className="flex items-center text-xs text-gray-500 justify-between">
-                    <span>{new Date(notebook.updated_at).toLocaleDateString()}</span>
+                    <span>{new Date(chat.updated_at).toLocaleDateString()} • {chat.document_count || 0} Docs</span>
                     <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
                   </div>
                 </div>
