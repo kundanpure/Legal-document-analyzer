@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useFiles } from "@/hooks/api";
+import { useNotebooks, useCreateNotebook } from "@/hooks/api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Plus, FileText, ArrowRight, Loader2, LogOut, User as UserIcon, ArrowLeft } from "lucide-react";
@@ -17,7 +17,8 @@ import {
 const DashboardPage = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
-  const { data: filesData, isLoading: filesLoading } = useFiles();
+  const { data: notebooksData, isLoading: notebooksLoading } = useNotebooks();
+  const createNotebook = useCreateNotebook();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -43,7 +44,19 @@ const DashboardPage = () => {
     );
   }
 
-  const notebooks = filesData?.files || [];
+  const notebooks = notebooksData?.notebooks || [];
+
+  const handleCreateNotebook = async () => {
+    try {
+      const newNotebook = await createNotebook.mutateAsync({
+        title: "Untitled Notebook",
+        description: "New isolated workspace"
+      });
+      navigate(`/notebook/${newNotebook.id}?new=true`);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#050505] text-white selection:bg-blue-500/30">
@@ -119,7 +132,7 @@ const DashboardPage = () => {
           <p className="text-gray-400">Manage your legal documents and chat sessions.</p>
         </div>
 
-        {filesLoading ? (
+        {notebooksLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
           </div>
@@ -127,21 +140,21 @@ const DashboardPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {/* Create New Notebook Card */}
             <Card 
-              onClick={() => navigate("/chat?new=true")}
+              onClick={handleCreateNotebook}
               className="group cursor-pointer border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20 transition-all duration-300 rounded-2xl h-56 flex flex-col items-center justify-center shadow-lg hover:shadow-xl hover:-translate-y-1"
             >
               <div className="w-14 h-14 rounded-full bg-blue-500/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-blue-500/20 transition-all">
                 <Plus className="w-6 h-6 text-blue-400" />
               </div>
               <h3 className="font-medium text-lg">New Notebook</h3>
-              <p className="text-sm text-gray-500 mt-1">Upload a new document</p>
+              <p className="text-sm text-gray-500 mt-1">Create a new workspace</p>
             </Card>
 
             {/* Existing Notebooks */}
             {notebooks.map((notebook: any) => (
               <Card 
-                key={notebook.file_id}
-                onClick={() => navigate(`/chat/${notebook.file_id}`)}
+                key={notebook.id}
+                onClick={() => navigate(`/notebook/${notebook.id}`)}
                 className="group cursor-pointer border border-white/10 bg-[#0A0A0A] hover:border-white/20 transition-all duration-300 rounded-2xl h-56 flex flex-col p-6 shadow-lg hover:shadow-xl hover:-translate-y-1 relative overflow-hidden"
               >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-full -mr-10 -mt-10 transition-all group-hover:bg-blue-500/10" />
@@ -154,10 +167,10 @@ const DashboardPage = () => {
 
                 <div className="relative z-10">
                   <h3 className="font-medium text-base line-clamp-2 mb-1 group-hover:text-blue-400 transition-colors">
-                    {notebook.filename}
+                    {notebook.title}
                   </h3>
                   <div className="flex items-center text-xs text-gray-500 justify-between">
-                    <span>{new Date(notebook.uploaded_at).toLocaleDateString()}</span>
+                    <span>{new Date(notebook.updated_at).toLocaleDateString()}</span>
                     <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
                   </div>
                 </div>

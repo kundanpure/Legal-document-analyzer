@@ -20,6 +20,16 @@ export interface UploadNotificationResponse {
   estimated_processing_time?: string;
 }
 
+export interface Notebook {
+  id: string;
+  user_id: string;
+  title: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+  document_count: number;
+}
+
 export interface FileMetadata {
   file_id: string;
   filename: string;
@@ -198,6 +208,7 @@ class ApiService {
     original_filename: string;
     file_size: number;
     content_type: string;
+    notebook_id?: string;
   }): Promise<UploadNotificationResponse> {
     return this.request<UploadNotificationResponse>('/api/uploads/notify-uploaded', {
       method: 'POST',
@@ -210,12 +221,14 @@ class ApiService {
     offset?: number;
     status?: string;
     file_type?: string;
+    notebook_id?: string;
   }) {
     const queryParams = new URLSearchParams();
     if (params?.limit) queryParams.set('limit', params.limit.toString());
     if (params?.offset) queryParams.set('offset', params.offset.toString());
     if (params?.status) queryParams.set('status', params.status);
     if (params?.file_type) queryParams.set('file_type', params.file_type);
+    if (params?.notebook_id) queryParams.set('notebook_id', params.notebook_id);
 
     const query = queryParams.toString();
     const endpoint = `/api/uploads${query ? `?${query}` : ''}`;
@@ -437,7 +450,7 @@ class ApiService {
     return `${this.baseUrl}${endpoint}`;
   }
 
-  async uploadFile(file: File): Promise<{
+  async uploadFile(file: File, notebookId?: string): Promise<{
     file_id: string;
     processing_started: boolean;
     job_id?: string;
@@ -448,6 +461,10 @@ class ApiService {
       const formData = new FormData();
       formData.append("file", file);
 
+      const endpoint = notebookId 
+          ? `/api/uploads/direct?notebook_id=${encodeURIComponent(notebookId)}`
+          : '/api/uploads/direct';
+          
       // 1) Direct upload to backend
       const uploadResp = await this.request<{
           file_id: string;
@@ -455,7 +472,7 @@ class ApiService {
           filename: string;
           content_type: string;
           size: number;
-      }>('/api/uploads/direct', {
+      }>(endpoint, {
           method: 'POST',
           body: formData,
       });
@@ -469,6 +486,7 @@ class ApiService {
         original_filename: uploadResp.filename,
         file_size: uploadResp.size,
         content_type: uploadResp.content_type || "application/pdf",
+        notebook_id: notebookId,
       });
 
       console.log("Upload notification sent:", notification);
@@ -482,7 +500,28 @@ class ApiService {
       throw error;
     }
   }
+  
+  // Notebooks
+  async createNotebook(title: string, description?: string): Promise<Notebook> {
+    return this.request<Notebook>('/api/notebooks', {
+      method: 'POST',
+      body: JSON.stringify({ title, description }),
+    });
+  }
 
+  async listNotebooks(): Promise<{ notebooks: Notebook[] }> {
+    return this.request<{ notebooks: Notebook[] }>('/api/notebooks');
+  }
+
+  async getNotebook(notebookId: string): Promise<Notebook> {
+    return this.request<Notebook>(`/api/notebooks/${notebookId}`);
+  }
+
+  async deleteNotebook(notebookId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/notebooks/${notebookId}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const apiService = new ApiService();

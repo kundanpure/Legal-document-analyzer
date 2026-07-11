@@ -17,6 +17,8 @@ const queryKeys = {
   insights: (fileId: string) => ['insights', fileId] as const,
   chatHistory: (fileId: string) => ['chat-history', fileId] as const,
   health: () => ['health'] as const,
+  notebooks: () => ['notebooks'] as const,
+  notebook: (id: string) => ['notebook', id] as const,
 };
 
 // Upload hooks
@@ -25,6 +27,7 @@ export const useFiles = (params?: {
   offset?: number;
   status?: string;
   file_type?: string;
+  notebook_id?: string;
 }) => {
   return useQuery({
     queryKey: queryKeys.files(params),
@@ -84,12 +87,12 @@ export const useUploadFile = () => {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (file: File): Promise<{
+    mutationFn: async ({ file, notebookId }: { file: File, notebookId?: string }): Promise<{
       file_id: string;
       processing_started: boolean;
       job_id?: string;
     }> => {
-      return await apiService.uploadFile(file);
+      return await apiService.uploadFile(file, notebookId);
     },
     onSuccess: (data) => {
       // Invalidate files list to show new file
@@ -138,6 +141,74 @@ export const useDeleteFile = () => {
       console.error('Delete error:', error);
       toast({
         title: 'Delete failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+};
+
+// Notebook hooks
+export const useNotebooks = () => {
+  return useQuery({
+    queryKey: queryKeys.notebooks(),
+    queryFn: () => apiService.listNotebooks(),
+    staleTime: 30000,
+  });
+};
+
+export const useNotebook = (notebookId: string | undefined) => {
+  return useQuery({
+    queryKey: queryKeys.notebook(notebookId!),
+    queryFn: () => apiService.getNotebook(notebookId!),
+    enabled: !!notebookId,
+  });
+};
+
+export const useCreateNotebook = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ title, description }: { title: string; description?: string }) => {
+      return await apiService.createNotebook(title, description);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notebooks() });
+      toast({
+        title: 'Notebook created',
+        description: 'Your new notebook has been created.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to create notebook',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+};
+
+export const useDeleteNotebook = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (notebookId: string) => {
+      return await apiService.deleteNotebook(notebookId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notebooks() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.files() });
+      toast({
+        title: 'Notebook deleted',
+        description: 'The notebook and its files have been deleted.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to delete notebook',
         description: error.message,
         variant: 'destructive',
       });

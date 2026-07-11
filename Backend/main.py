@@ -140,6 +140,11 @@ class UploadNotificationRequest(BaseModel):
     original_filename: str
     file_size: int
     content_type: str
+    notebook_id: Optional[str] = None
+
+class NotebookCreateRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
 
 class ProcessingStartRequest(BaseModel):
     file_id: str
@@ -167,6 +172,7 @@ jobs_data: Dict[str, Dict[str, Any]] = {}
 insights_data: Dict[str, Dict[str, Any]] = {}
 conversations_data: Dict[str, Dict[str, Any]] = {}
 signed_urls_data: Dict[str, Any] = {}
+notebooks_data: Dict[str, Dict[str, Any]] = {}
 
 DB_FILE = "legalmind_db.json"
 
@@ -180,7 +186,8 @@ def load_db():
                 jobs_data.update(data.get("jobs", {}))
                 insights_data.update(data.get("insights", {}))
                 conversations_data.update(data.get("conversations", {}))
-            logger.info(f" Loaded database from {DB_FILE} with {len(files_data)} files")
+                notebooks_data.update(data.get("notebooks", {}))
+            logger.info(f" Loaded database from {DB_FILE} with {len(files_data)} files and {len(notebooks_data)} notebooks")
         except Exception as e:
             logger.error(f"Error loading DB: {e}")
 
@@ -191,7 +198,8 @@ def save_db():
                 "files": files_data,
                 "jobs": jobs_data,
                 "insights": insights_data,
-                "conversations": conversations_data
+                "conversations": conversations_data,
+                "notebooks": notebooks_data
             }, f, default=str)
     except Exception as e:
         logger.error(f"Error saving DB: {e}")
@@ -268,7 +276,7 @@ from fastapi import File, UploadFile
 from google.cloud import storage
 
 @app.post("/api/uploads/direct")
-async def upload_direct(file: UploadFile = File(...)):
+async def upload_direct(file: UploadFile = File(...), notebook_id: Optional[str] = None):
     try:
         file_id = generate_id("file")
         filename = file.filename
@@ -298,7 +306,8 @@ async def upload_direct(file: UploadFile = File(...)):
             "gcs_path": f"gs://{settings.GCS_BUCKET_NAME}/{object_key}",
             "filename": filename,
             "content_type": file.content_type,
-            "size": len(content)
+            "processing_started": True,
+            "notebook_id": notebook_id
         }
     except Exception as e:
         logger.error(f"Direct upload failed: {e}")
@@ -310,14 +319,16 @@ async def notify_uploaded(req: UploadNotificationRequest, request: Request):
     files_data[req.file_id] = {
         "file_id": req.file_id,
         "original_filename": req.original_filename,
-        "file_size": req.file_size,
         "content_type": req.content_type,
-        "gcs_path": req.gcs_path,
+        "file_size": req.file_size,
         "uploaded_at": get_utc_timestamp(),
-        "processing_status": "queued",
-        "insights": {},
-        "metadata": {},
-        "user_id": user_id,
+        "updated_at": get_utc_timestamp(),
+        "processing_status": "pending",
+        "notebook_id": req.notebook_id,
+        "metadata": {
+            "page_count": 0
+        },
+        "user_id": user_id
     }
 
     job_id = f"job_{uuid.uuid4().hex[:8]}"
@@ -521,7 +532,8 @@ async def list_user_files(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     status: Optional[str] = Query(None, description="Filter by status"),
-    file_type: Optional[str] = Query(None, description="Filter by file type")
+    file_type: Optional[str] = Query(None, description="Filter by file type"),
+    notebook_id: Optional[str] = Query(None, description="Filter by notebook ID")
 ):
     user_id = request.headers.get("X-User-ID")
     try:
@@ -532,6 +544,8 @@ async def list_user_files(
             all_files = [f for f in all_files if f.get("processing_status") == status]
         if file_type:
             all_files = [f for f in all_files if f.get("metadata", {}).get("file_type") == file_type]
+        if notebook_id:
+            all_files = [f for f in all_files if f.get("notebook_id") == notebook_id]
         all_files.sort(key=lambda x: x.get("uploaded_at", ""), reverse=True)
         paginated_files = all_files[offset:offset + limit]
 
@@ -1496,6 +1510,62 @@ def debug_imports():
         try:
             importlib.import_module(module_path)
         except Exception as e:
-            import traceback
-            errors[service_name] = traceback.format_exc()
-    return errors
+            pass
+    return {"imports": errors}
+
+# ================================
+# NOTEBOOKS
+# ================================
+@app.post("/api/notebooks")
+async def create_notebook(request: Request, body: NotebookCreateRequest):
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        user_id = "user_123"  # Mock default
+    
+    notebook_id = generate_id("notebook")
+    notebook = {
+        "id": notebook_id,
+        "user_id": user_id,
+        "title": body.title,
+        "description": body.description,
+        "created_at": get_utc_timestamp(),
+        "updated_at": get_utc_timestamp(),
+    }
+    notebooks_data[notebook_id] = notebook
+    save_db()
+    
+    return notebook
+
+@app.get("/api/notebooks")
+async def list_notebooks(request: Request):
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        user_id = "user_123"
+        
+    user_notebooks = [n for n in notebooks_data.values() if n.get("user_id") == user_id]
+    user_notebooks.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+    
+    # Calculate document counts
+    for nb in user_notebooks:
+        nb["document_count"] = len([f for f in files_data.values() if f.get("notebook_id") == nb["id"]])
+        
+    return {"notebooks": user_notebooks}
+
+@app.get("/api/notebooks/{notebook_id}")
+async def get_notebook(notebook_id: str, request: Request):
+    if notebook_id not in notebooks_data:
+        raise HTTPException(status_code=404, detail="Notebook not found")
+    return notebooks_data[notebook_id]
+
+@app.delete("/api/notebooks/{notebook_id}")
+async def delete_notebook(notebook_id: str, request: Request):
+    if notebook_id in notebooks_data:
+        del notebooks_data[notebook_id]
+        
+        # Delete associated files
+        files_to_delete = [f_id for f_id, f in files_data.items() if f.get("notebook_id") == notebook_id]
+        for f_id in files_to_delete:
+            del files_data[f_id]
+            
+        save_db()
+    return {"success": True}
