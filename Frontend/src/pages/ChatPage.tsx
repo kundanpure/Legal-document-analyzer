@@ -270,8 +270,8 @@ const ChatPage = () => {
   useEffect(() => {
     if (location.state?.newNotebook) {
       setShowUploadModal(true);
-      // Clean up the state so it doesn't keep showing on reload
-      window.history.replaceState({}, document.title)
+      // Clean up the state properly using React Router
+      navigate(location.pathname, { replace: true, state: {} });
       return;
     }
     if (selectedFiles.length === 0 && uploadedFiles.length > 0 && !location.state?.activeFileId) {
