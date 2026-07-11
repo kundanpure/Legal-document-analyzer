@@ -124,12 +124,6 @@ class ApiService {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     
-    console.log('API Request:', {
-      url,
-      method: options.method || 'GET',
-      hasBody: !!options.body
-    });
-
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -152,12 +146,6 @@ class ApiService {
           ...options.headers,
         },
         ...options,
-      });
-
-      console.log('API Response:', {
-        status: response.status,
-        statusText: response.statusText,
-        url: response.url
       });
 
       if (!response.ok) {
