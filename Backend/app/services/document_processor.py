@@ -53,15 +53,6 @@ class RealDocumentProcessor:
         self.processor_name = None
 
         try:
-            # ---- Credentials (must exist) ----
-            credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-            if not credentials_path or not os.path.exists(credentials_path):
-                raise DocumentProcessingError(
-                    f"GOOGLE_APPLICATION_CREDENTIALS not found or invalid: {credentials_path}"
-                )
-            credentials = service_account.Credentials.from_service_account_file(credentials_path)
-            sa_email = getattr(credentials, "service_account_email", "unknown")
-
             # ---- Required envs ----
             self.project_id = os.getenv('GOOGLE_CLOUD_PROJECT')
             self.location = os.getenv('DOCUMENT_AI_LOCATION', 'us')
@@ -73,6 +64,19 @@ class RealDocumentProcessor:
                 raise DocumentProcessingError("Missing env DOCUMENT_AI_PROCESSOR_ID")
             if not self.location:
                 raise DocumentProcessingError("Missing env DOCUMENT_AI_LOCATION")
+
+            # ---- Credentials: prefer key file, else fall back to default ADC ----
+            credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+            if credentials_path and os.path.exists(credentials_path):
+                credentials = service_account.Credentials.from_service_account_file(credentials_path)
+                sa_email = getattr(credentials, "service_account_email", "unknown")
+                self.logger.info("Using service account from key file: %s", sa_email)
+            else:
+                # Cloud Run / GCE: use Application Default Credentials
+                import google.auth
+                credentials, _ = google.auth.default()
+                sa_email = getattr(credentials, "service_account_email", "default-adc")
+                self.logger.info("Using Application Default Credentials (ADC): %s", sa_email)
 
             # ---- Regional endpoint (CRITICAL) ----
             api_endpoint = f"{self.location}-documentai.googleapis.com"
@@ -104,8 +108,6 @@ class RealDocumentProcessor:
                 )
 
             self.logger.info("RealDocumentProcessor initialized successfully")
-            self.logger.info("GOOGLE_APPLICATION_CREDENTIALS: %s", credentials_path)
-            self.logger.info("Using service account: %s", sa_email)
             self.logger.info(
                 "DocAI target -> project=%s location=%s processor=%s endpoint=%s",
                 self.project_id, self.location, self.processor_id, api_endpoint
