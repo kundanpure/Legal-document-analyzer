@@ -15,8 +15,14 @@ const queryKeys = {
   fileMetadata: (fileId: string) => ['file-metadata', fileId] as const,
   jobStatus: (jobId: string) => ['job-status', jobId] as const,
   insights: (fileId: string) => ['insights', fileId] as const,
-  chatHistory: (fileId: string) => ['chat-history', fileId] as const,
+  chatHistory: (id: string) => ['chat-history', id] as const,
   health: () => ['health'] as const,
+  chats: () => ['chats'] as const,
+  chat: (id: string) => ['chat', id] as const,
+  chatStatus: (id: string) => ['chat-status', id] as const,
+  // legacy
+  notebooks: () => ['notebooks'] as const,
+  notebook: (id: string) => ['notebook', id] as const,
 };
 
 // Upload hooks
@@ -25,6 +31,8 @@ export const useFiles = (params?: {
   offset?: number;
   status?: string;
   file_type?: string;
+  chat_id?: string;
+  notebook_id?: string; // backward compat
 }) => {
   return useQuery({
     queryKey: queryKeys.files(params),
@@ -84,25 +92,16 @@ export const useUploadFile = () => {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (file: File): Promise<{
+    mutationFn: async ({ file, chatId, notebookId }: { file: File, chatId?: string, notebookId?: string }): Promise<{
       file_id: string;
       processing_started: boolean;
       job_id?: string;
     }> => {
-      return await apiService.uploadFile(file);
+      return await apiService.uploadFile(file, chatId || notebookId);
     },
     onSuccess: (data) => {
-      // Invalidate files list to show new file
-      queryClient.invalidateQueries({ 
-        queryKey: queryKeys.files() 
-      });
-      
-      toast({
-        title: 'Upload successful',
-        description: `File uploaded and processing ${data.processing_started ? 'started' : 'queued'}`,
-      });
-
-      // Start tracking the file metadata
+      queryClient.invalidateQueries({ queryKey: queryKeys.files() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
       queryClient.prefetchQuery({
         queryKey: queryKeys.fileMetadata(data.file_id),
         queryFn: () => apiService.getFileMetadata(data.file_id),
@@ -141,6 +140,121 @@ export const useDeleteFile = () => {
         description: error.message,
         variant: 'destructive',
       });
+    },
+  });
+};
+
+// Chat hooks (primary)
+export const useChats = () => {
+  return useQuery({
+    queryKey: queryKeys.chats(),
+    queryFn: () => apiService.listChats(),
+    staleTime: 30000,
+  });
+};
+
+export const useChatDetails = (chatId: string | undefined) => {
+  return useQuery({
+    queryKey: queryKeys.chat(chatId!),
+    queryFn: () => apiService.getChat(chatId!),
+    enabled: !!chatId,
+  });
+};
+
+export const useCreateChat = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (title?: string) => {
+      return await apiService.createChat(title);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
+    },
+  });
+};
+
+export const useDeleteChat = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (chatId: string) => {
+      return await apiService.deleteChat(chatId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.files() });
+      toast({ title: 'Chat deleted', description: 'Chat and its files have been deleted.' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to delete chat', description: error.message, variant: 'destructive' });
+    },
+  });
+};
+
+export const useChatStatus = (chatId: string | null, enabled = true) => {
+  return useQuery({
+    queryKey: queryKeys.chatStatus(chatId!),
+    queryFn: () => apiService.getChatStatus(chatId!),
+    enabled: !!chatId && enabled,
+    refetchInterval: (query) => {
+      const data = query.state.data as any;
+      if (!data) return 3000;
+      if (data.all_processed || data.any_failed) return false;
+      return 3000; // poll every 3s while processing
+    },
+    staleTime: 0,
+  });
+};
+
+// Legacy notebook hooks (kept for backward compat)
+export const useNotebooks = () => {
+  return useQuery({
+    queryKey: queryKeys.notebooks(),
+    queryFn: () => apiService.listNotebooks(),
+    staleTime: 30000,
+  });
+};
+
+export const useNotebook = (notebookId: string | undefined) => {
+  return useQuery({
+    queryKey: queryKeys.notebook(notebookId!),
+    queryFn: () => apiService.getNotebook(notebookId!),
+    enabled: !!notebookId,
+  });
+};
+
+export const useCreateNotebook = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ title, description }: { title: string; description?: string }) => {
+      return await apiService.createChat(title);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.notebooks() });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to create notebook', description: error.message, variant: 'destructive' });
+    },
+  });
+};
+
+export const useDeleteNotebook = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (notebookId: string) => {
+      return await apiService.deleteChat(notebookId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.chats() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.notebooks() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.files() });
+      toast({ title: 'Notebook deleted' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to delete notebook', description: error.message, variant: 'destructive' });
     },
   });
 };
@@ -314,6 +428,8 @@ export const useChat = () => {
     mutationFn: (data: {
       message: string;
       file_id?: string;
+      file_ids?: string[];
+      chat_id?: string;
       conversation_id?: string;
       stream?: boolean;
     }): Promise<ChatResponse> => apiService.sendMessage(data),
@@ -403,11 +519,11 @@ export const useChatConversation = (fileId?: string) => {
   };
 };
 
-export const useConversation = (fileId: string | null) => {
+export const useConversationByChat = (chatId: string | null) => {
   return useQuery({
-    queryKey: queryKeys.chatHistory(fileId!),
-    queryFn: () => apiService.getConversation(fileId!),
-    enabled: !!fileId,
+    queryKey: queryKeys.chatHistory(chatId!),
+    queryFn: () => apiService.getConversationByChat(chatId!),
+    enabled: !!chatId,
     staleTime: 0,
   });
 };

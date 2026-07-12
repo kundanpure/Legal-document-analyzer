@@ -112,6 +112,7 @@ export const UploadModal = ({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent
+        aria-describedby="upload-dialog-desc"
         // Simplified styles: h-[90vh] and my-auto center the 90vh modal in the 100vh viewport.
         className="w-[95vw] max-w-2xl md:max-w-3xl h-[90vh] flex flex-col mx-auto my-auto p-0 gap-0"
       >
@@ -121,6 +122,7 @@ export const UploadModal = ({
             <DialogTitle className="heading-sans text-xl md:text-2xl font-light">
               Upload Legal Documents
             </DialogTitle>
+            <div id="upload-dialog-desc" className="sr-only">Upload your legal documents here. Max 10MB per file.</div>
             <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mt-3">
               <Badge variant="secondary">
                 {currentFileCount + selectedFiles.length} / {MAX_FILES} PDFs

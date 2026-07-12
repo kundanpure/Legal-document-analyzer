@@ -82,11 +82,11 @@ def _download_gcs_as_bytes(gcs_uri: str) -> bytes:
         object_key = gcs_uri.lstrip("/")
 
     creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    if not creds_path or not os.path.exists(creds_path):
-        raise RuntimeError("Missing GOOGLE_APPLICATION_CREDENTIALS")
-    creds = service_account.Credentials.from_service_account_file(creds_path)
-
-    client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT, credentials=creds)
+    if creds_path and os.path.exists(creds_path):
+        creds = service_account.Credentials.from_service_account_file(creds_path)
+        client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT, credentials=creds)
+    else:
+        client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT)
     blob = client.bucket(bucket_name).blob(object_key)
     if not blob.exists(client):
         raise FileNotFoundError(f"GCS object not found: gs://{bucket_name}/{object_key}")
@@ -140,6 +140,12 @@ class UploadNotificationRequest(BaseModel):
     original_filename: str
     file_size: int
     content_type: str
+    chat_id: Optional[str] = None  # renamed from notebook_id
+    notebook_id: Optional[str] = None  # keep for backward compat
+
+class NotebookCreateRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
 
 class ProcessingStartRequest(BaseModel):
     file_id: str
@@ -153,9 +159,14 @@ class InsightRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
-    file_id: Optional[str] = None
+    file_id: Optional[str] = None          # legacy single-doc (still accepted)
+    file_ids: Optional[List[str]] = None   # multi-doc list (preferred)
     conversation_id: Optional[str] = None
+    chat_id: Optional[str] = None
     stream: bool = False
+
+class ChatCreateRequest(BaseModel):
+    title: Optional[str] = None
 
 class ExportConversationRequest(BaseModel):
     conversation_id: str
@@ -167,11 +178,12 @@ jobs_data: Dict[str, Dict[str, Any]] = {}
 insights_data: Dict[str, Dict[str, Any]] = {}
 conversations_data: Dict[str, Dict[str, Any]] = {}
 signed_urls_data: Dict[str, Any] = {}
+chats_data: Dict[str, Dict[str, Any]] = {}  # renamed from notebooks_data
 
 DB_FILE = "legalmind_db.json"
 
 def load_db():
-    global files_data, jobs_data, insights_data, conversations_data
+    global files_data, jobs_data, insights_data, conversations_data, chats_data
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r") as f:
@@ -180,7 +192,9 @@ def load_db():
                 jobs_data.update(data.get("jobs", {}))
                 insights_data.update(data.get("insights", {}))
                 conversations_data.update(data.get("conversations", {}))
-            logger.info(f" Loaded database from {DB_FILE} with {len(files_data)} files")
+                # Support both old 'notebooks' key and new 'chats' key
+                chats_data.update(data.get("chats", data.get("notebooks", {})))
+            logger.info(f" Loaded database from {DB_FILE} with {len(files_data)} files and {len(chats_data)} chats")
         except Exception as e:
             logger.error(f"Error loading DB: {e}")
 
@@ -191,7 +205,8 @@ def save_db():
                 "files": files_data,
                 "jobs": jobs_data,
                 "insights": insights_data,
-                "conversations": conversations_data
+                "conversations": conversations_data,
+                "chats": chats_data
             }, f, default=str)
     except Exception as e:
         logger.error(f"Error saving DB: {e}")
@@ -264,66 +279,80 @@ async def verify_token(request: AuthTokenRequest):
 from google.cloud import storage
 from google.oauth2 import service_account
 
-@app.post("/api/uploads/get-signed-url")
-async def get_signed_url(request: SignedUrlRequest):
-    """
-    Return a real V4 signed URL for uploading directly to GCS via PUT.
-    """
+from fastapi import File, UploadFile
+from google.cloud import storage
+
+@app.post("/api/uploads/direct")
+async def upload_direct(file: UploadFile = File(...), chat_id: Optional[str] = None, notebook_id: Optional[str] = None):
     try:
+        # Support both chat_id (new) and notebook_id (legacy)
+        effective_chat_id = chat_id or notebook_id
         file_id = generate_id("file")
-        filename = request.filename
+        filename = file.filename
         object_key = f"uploads/{file_id}/{filename}"
-        content_type = request.content_type or "application/pdf"
-
+        
         creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if not creds_path or not os.path.exists(creds_path):
-            raise HTTPException(
-                status_code=500,
-                detail=f"GOOGLE_APPLICATION_CREDENTIALS not found or invalid: {creds_path}"
-            )
-        creds = service_account.Credentials.from_service_account_file(creds_path)
-
-        storage_client = storage.Client(
-            project=settings.GOOGLE_CLOUD_PROJECT,
-            credentials=creds
-        )
+        if creds_path and os.path.exists(creds_path):
+            creds = service_account.Credentials.from_service_account_file(creds_path)
+            storage_client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT, credentials=creds)
+        else:
+            storage_client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT)
+            
         bucket = storage_client.bucket(settings.GCS_BUCKET_NAME)
         blob = bucket.blob(object_key)
-
-        signed_url = blob.generate_signed_url(
-            method="PUT",
-            version="v4",
-            expiration=timedelta(minutes=10),
-            content_type=content_type,
+        
+        content = await file.read()
+        
+        # Run upload in thread to not block event loop
+        await asyncio.to_thread(
+            blob.upload_from_string, 
+            content, 
+            content_type=file.content_type
         )
-
+        
         return {
             "file_id": file_id,
-            "signed_url": signed_url,
-            "expires_at": get_utc_timestamp(),
-            "upload_fields": {"key": object_key, "Content-Type": content_type},
             "gcs_path": f"gs://{settings.GCS_BUCKET_NAME}/{object_key}",
+            "filename": filename,
+            "content_type": file.content_type,
+            "size": len(content),
+            "processing_started": True,
+            "chat_id": effective_chat_id
         }
-
     except Exception as e:
-        logger.error(f"Signed URL generation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate signed URL: {e}")
+        logger.error(f"Direct upload failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
 
 @app.post("/api/uploads/notify-uploaded")
 async def notify_uploaded(req: UploadNotificationRequest, request: Request):
     user_id = request.headers.get("X-User-ID", "anonymous")
+    # Support both chat_id (new) and notebook_id (legacy)
+    effective_chat_id = req.chat_id or req.notebook_id
     files_data[req.file_id] = {
         "file_id": req.file_id,
         "original_filename": req.original_filename,
-        "file_size": req.file_size,
         "content_type": req.content_type,
+        "file_size": req.file_size,
         "gcs_path": req.gcs_path,
         "uploaded_at": get_utc_timestamp(),
-        "processing_status": "queued",
-        "insights": {},
-        "metadata": {},
-        "user_id": user_id,
+        "updated_at": get_utc_timestamp(),
+        "processing_status": "pending",
+        "chat_id": effective_chat_id,
+        "notebook_id": effective_chat_id,  # backward compat
+        "metadata": {
+            "page_count": 0
+        },
+        "user_id": user_id
     }
+
+    # Add file to chat's document list
+    if effective_chat_id and effective_chat_id in chats_data:
+        chat = chats_data[effective_chat_id]
+        if "document_ids" not in chat:
+            chat["document_ids"] = []
+        if req.file_id not in chat["document_ids"]:
+            chat["document_ids"].append(req.file_id)
+        chat["updated_at"] = get_utc_timestamp()
 
     job_id = f"job_{uuid.uuid4().hex[:8]}"
     jobs_data[job_id] = {
@@ -411,6 +440,114 @@ async def process_file_job(file_id: str, job_id: str):
         jobs_data[job_id]["updated_at"] = get_utc_timestamp()
         logger.info(f" [JOB DONE] file_id={file_id} job_id={job_id}")
 
+        # 5) Auto-generate document summary and chat title via Gemini
+        filename = files_data[file_id].get("original_filename", "document")
+        doc_summary = "Summary generation unavailable."
+        chat_title = filename
+
+        # Pre-set fallbacks so the frontend doesn't hang if AI fails or is skipped
+        files_data[file_id]["analysis"]["summary"] = doc_summary
+        files_data[file_id]["doc_summary"] = doc_summary
+        files_data[file_id]["ai_title"] = chat_title
+
+        try:
+            text_sample = extraction.get("full_text", "")[:4000]
+            api_key = os.getenv("GOOGLE_API_KEY", "")
+            if api_key and text_sample.strip():
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel("gemini-3.5-flash")
+                prompt = (
+                    f"You are a legal document assistant. Analyze this document excerpt and provide:\n"
+                    f"1. A SHORT TITLE (5-8 words max) for a chat session about this document\n"
+                    f"2. A BRIEF SUMMARY (50-60 words) of what this document is about\n\n"
+                    f"Document filename: {filename}\n"
+                    f"Document text excerpt:\n{text_sample}\n\n"
+                    f"Respond in this exact JSON format:\n"
+                    f'{{"title": "...", "summary": "..."}}'
+                )
+                resp = await asyncio.to_thread(lambda: model.generate_content(prompt))
+                resp_text = resp.text.strip()
+                # Parse JSON
+                import re
+                
+                # Better regex to capture JSON even with nested braces
+                json_match = re.search(r'\{.*\}', resp_text, re.DOTALL)
+                if json_match:
+                    try:
+                        ai_result = json.loads(json_match.group())
+                        doc_summary = ai_result.get("summary", "Summary generated, but empty.")
+                        chat_title = ai_result.get("title", filename)
+                        
+                        files_data[file_id]["analysis"]["summary"] = doc_summary
+                        files_data[file_id]["doc_summary"] = doc_summary
+                        files_data[file_id]["ai_title"] = chat_title
+                        
+                    except json.JSONDecodeError as e:
+                        logger.warning(f" [AI] JSON Decode failed: {e}, Response: {resp_text}")
+                        # Fallback parsing if JSON fails but response exists
+                        files_data[file_id]["doc_summary"] = f"Generated summary: {resp_text[:200]}..."
+
+                # Update the parent chat's title and summary
+                chat_id = files_data[file_id].get("chat_id")
+                if chat_id and chat_id in chats_data:
+                    chat = chats_data[chat_id]
+                    # Only set title if it's still the default
+                    if not chat.get("title") or chat["title"] == "New Chat":
+                        chat["title"] = chat_title
+                    # Always append/update the doc summary in chat
+                    if "doc_summaries" not in chat:
+                        chat["doc_summaries"] = {}
+                    chat["doc_summaries"][file_id] = {
+                        "filename": filename,
+                        "summary": doc_summary,
+                        "title": chat_title,
+                    }
+                    chat["updated_at"] = get_utc_timestamp()
+                logger.info(f" [AI] Auto-title='{chat_title}', summary generated ({len(doc_summary)} chars)")
+                
+                # Persist the changes immediately
+                save_db()
+            else:
+                if not api_key:
+                    logger.warning(" [AI] Skipped summary generation because GOOGLE_API_KEY is not set.")
+                if not text_sample.strip():
+                    logger.warning(" [AI] Skipped summary generation because document text is empty.")
+                # We still need to update chat if skipped, so frontend doesn't hang
+                chat_id = files_data[file_id].get("chat_id")
+                if chat_id and chat_id in chats_data:
+                    chat = chats_data[chat_id]
+                    if not chat.get("title") or chat["title"] == "New Chat":
+                        chat["title"] = chat_title
+                    if "doc_summaries" not in chat:
+                        chat["doc_summaries"] = {}
+                    chat["doc_summaries"][file_id] = {
+                        "filename": filename,
+                        "summary": doc_summary,
+                        "title": chat_title,
+                    }
+                    chat["updated_at"] = get_utc_timestamp()
+                save_db()
+        except Exception as e:
+            logger.warning(f" [AI] Auto-title/summary generation failed (non-fatal): {e}")
+            # Even if it fails, we should update the chat so it doesn't hang
+            chat_id = files_data[file_id].get("chat_id")
+            if chat_id and chat_id in chats_data:
+                chat = chats_data[chat_id]
+                if not chat.get("title") or chat["title"] == "New Chat":
+                    chat["title"] = chat_title
+                if "doc_summaries" not in chat:
+                    chat["doc_summaries"] = {}
+                chat["doc_summaries"][file_id] = {
+                    "filename": filename,
+                    "summary": doc_summary,
+                    "title": chat_title,
+                }
+                chat["updated_at"] = get_utc_timestamp()
+            save_db()
+
+        save_db()
+
     except Exception as e:
         error_msg = str(e)
         logger.error(f"💥 [JOB FAILED] file_id={file_id}: {error_msg}")
@@ -421,6 +558,7 @@ async def process_file_job(file_id: str, job_id: str):
         jobs_data[job_id]["error"] = error_msg
         jobs_data[job_id]["updated_at"] = get_utc_timestamp()
 
+
 async def download_file_from_gcs_real(gcs_path: str) -> str:
     """Download a file from GCS using the SAME service account as Document AI."""
     try:
@@ -429,14 +567,14 @@ async def download_file_from_gcs_real(gcs_path: str) -> str:
         import tempfile
 
         creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if not creds_path or not os.path.exists(creds_path):
-            raise Exception(f"GOOGLE_APPLICATION_CREDENTIALS not found or invalid: {creds_path}")
-        creds = service_account.Credentials.from_service_account_file(creds_path)
-
-        client = storage.Client(
-            project=settings.GOOGLE_CLOUD_PROJECT,
-            credentials=creds
-        )
+        if creds_path and os.path.exists(creds_path):
+            creds = service_account.Credentials.from_service_account_file(creds_path)
+            client = storage.Client(
+                project=settings.GOOGLE_CLOUD_PROJECT,
+                credentials=creds
+            )
+        else:
+            client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT)
 
         bucket_name = settings.GCS_BUCKET_NAME
         if gcs_path.startswith("gs://"):
@@ -526,9 +664,12 @@ async def list_user_files(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     status: Optional[str] = Query(None, description="Filter by status"),
-    file_type: Optional[str] = Query(None, description="Filter by file type")
+    file_type: Optional[str] = Query(None, description="Filter by file type"),
+    chat_id: Optional[str] = Query(None, description="Filter by chat ID"),
+    notebook_id: Optional[str] = Query(None, description="Filter by notebook ID (legacy)"),
 ):
     user_id = request.headers.get("X-User-ID")
+    effective_chat_id = chat_id or notebook_id
     try:
         all_files = list(files_data.values())
         if user_id:
@@ -537,6 +678,8 @@ async def list_user_files(
             all_files = [f for f in all_files if f.get("processing_status") == status]
         if file_type:
             all_files = [f for f in all_files if f.get("metadata", {}).get("file_type") == file_type]
+        if effective_chat_id:
+            all_files = [f for f in all_files if f.get("chat_id") == effective_chat_id or f.get("notebook_id") == effective_chat_id]
         all_files.sort(key=lambda x: x.get("uploaded_at", ""), reverse=True)
         paginated_files = all_files[offset:offset + limit]
 
@@ -622,11 +765,11 @@ async def get_file_download_url(file_id: str):
                 raise HTTPException(status_code=500, detail=f"Invalid gcs_path: {gcs_path}")
 
         creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if not creds_path or not os.path.exists(creds_path):
-            raise HTTPException(status_code=500, detail="Missing GOOGLE_APPLICATION_CREDENTIALS")
-        creds = service_account.Credentials.from_service_account_file(creds_path)
-
-        client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT, credentials=creds)
+        if creds_path and os.path.exists(creds_path):
+            creds = service_account.Credentials.from_service_account_file(creds_path)
+            client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT, credentials=creds)
+        else:
+            client = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT)
         blob = client.bucket(bucket_name).blob(object_key)
 
         download_url = blob.generate_signed_url(
@@ -752,6 +895,7 @@ async def request_summary_generation(file_id: str, request: Optional[InsightRequ
 
         files_data[file_id].setdefault("insights", {})
         files_data[file_id]["insights"]["summary"] = summary_data
+        save_db()
         return summary_data
 
     except HTTPException:
@@ -825,6 +969,7 @@ async def request_audio_generation(file_id: str, request: Optional[InsightReques
 
         files_data[file_id].setdefault("insights", {})
         files_data[file_id]["insights"]["audio"] = audio_data
+        save_db()
         return audio_data
 
     except HTTPException:
@@ -915,6 +1060,7 @@ async def request_report_generation(file_id: str, request: Optional[InsightReque
 
         files_data[file_id].setdefault("insights", {})
         files_data[file_id]["insights"]["report"] = report_data
+        save_db()
         return report_data
 
     except HTTPException:
@@ -1122,7 +1268,6 @@ real_download_url: {https_url}
 # ================================
 # CHAT
 # ================================
-# --- REPLACE the whole /api/chat route with this ---
 @app.post("/api/chat")
 async def sync_chat(request: ChatRequest):
     try:
@@ -1134,55 +1279,81 @@ async def sync_chat(request: ChatRequest):
                 "created_at": get_utc_timestamp(),
                 "messages": [],
                 "file_id": request.file_id,
+                "chat_id": request.chat_id,
                 "context": {}
             }
 
         conversation = conversations_data[conversation_id]
 
-        # ---- Build file_context with actual document text ----
+        # ---- Resolve file_ids (support both single file_id and list file_ids) ----
+        effective_file_ids: List[str] = []
+        if request.file_ids:
+            effective_file_ids = request.file_ids
+        elif request.file_id:
+            effective_file_ids = [request.file_id]
+
+        # ---- Build multi-doc file_context ----
         file_context: Dict[str, Any] = {}
-        if request.file_id:
-            if request.file_id not in files_data:
-                raise HTTPException(status_code=400, detail="Unknown file_id")
+        if effective_file_ids:
+            all_texts = []
+            all_filenames = []
+            still_processing = []
+            not_found = []
 
-            fd = files_data[request.file_id]
+            for fid in effective_file_ids:
+                if fid not in files_data:
+                    not_found.append(fid)
+                    continue
 
-            analysis = fd.get("analysis", {}) or {}
-            chunks = fd.get("chunks", []) or []
+                fd = files_data[fid]
+                status = fd.get("processing_status", "pending")
 
-            # Prefer chunk body; fallback only to analysis.full_text that we produced earlier
-            def _chunk_texts():
-                out = []
-                for c in chunks:
-                    txt = c.get("content") or c.get("text") or ""
-                    if txt:
-                        out.append(txt)
-                return out
+                if status in ("pending", "processing"):
+                    still_processing.append(fd.get("original_filename", fid))
+                    continue
+                elif status == "failed":
+                    continue  # skip failed docs silently
 
-            combined = "\n\n".join(_chunk_texts())
-            if not combined:
-                combined = analysis.get("full_text", "") or ""
+                chunks = fd.get("chunks", []) or []
+                analysis = fd.get("analysis", {}) or {}
 
-            if not combined.strip():
-                raise HTTPException(status_code=409, detail="No extracted text available for chat. Ensure DocAI and chunking finished successfully.")
+                def _chunk_texts_for(c_list):
+                    return [c.get("content") or c.get("text") or "" for c in c_list if c.get("content") or c.get("text")]
 
-            safe_text = clean_text_for_gemini(combined)
+                combined = "\n\n".join(_chunk_texts_for(chunks))
+                if not combined:
+                    combined = analysis.get("full_text", "") or ""
 
-            file_context = {
-                "filename": fd.get("original_filename"),
-                "file_type": fd.get("metadata", {}).get("file_type"),
-                "analysis": analysis,
-                "document_text": safe_text,
-                "chunks_meta": [
-                    {
-                        "index": i,
-                        "page_start": c.get("page_start"),
-                        "page_end": c.get("page_end"),
-                        "char_count": len((c.get("content") or c.get("text") or "")),
-                    }
-                    for i, c in enumerate(chunks)
-                ],
-            }
+                if combined.strip():
+                    doc_label = f"[Document: {fd.get('original_filename', fid)}]"
+                    all_texts.append(f"{doc_label}\n{combined}")
+                    all_filenames.append(fd.get("original_filename", fid))
+
+            # Friendly error if docs still processing
+            if still_processing and not all_texts:
+                raise HTTPException(
+                    status_code=425,
+                    detail=f"Document(s) still processing: {', '.join(still_processing)}. Please wait a moment and try again."
+                )
+
+            if not all_texts and effective_file_ids:
+                raise HTTPException(
+                    status_code=409,
+                    detail="No extracted text available for chat. Ensure document processing finished successfully."
+                )
+
+            if all_texts:
+                safe_text = clean_text_for_gemini("\n\n---\n\n".join(all_texts))
+                file_context = {
+                    "filename": ", ".join(all_filenames),
+                    "file_type": "legal_document",
+                    "analysis": {},
+                    "document_text": safe_text,
+                    "document_count": len(all_texts),
+                    "filenames": all_filenames,
+                }
+                if still_processing:
+                    file_context["partial_note"] = f"Note: {len(still_processing)} document(s) still processing were excluded."
 
         # ---- STRICT: require chat_handler service ----
         if 'chat_handler' not in available_services:
@@ -1197,7 +1368,7 @@ async def sync_chat(request: ChatRequest):
             "role": "user",
             "content": request.message,
             "timestamp": get_utc_timestamp(),
-            "file_id": request.file_id
+            "file_ids": effective_file_ids
         }
         assistant_message = {
             "message_id": generate_id("msg"),
@@ -1210,6 +1381,8 @@ async def sync_chat(request: ChatRequest):
 
         conversation["messages"].extend([user_message, assistant_message])
         conversation["last_activity"] = get_utc_timestamp()
+        if request.chat_id:
+            conversation["chat_id"] = request.chat_id
 
         return {
             "conversation_id": conversation_id,
@@ -1226,6 +1399,7 @@ async def sync_chat(request: ChatRequest):
         }
     except HTTPException:
         raise
+
     except Exception as e:
         logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=f"Chat processing failed: {e}")
@@ -1493,3 +1667,176 @@ if __name__ == "__main__":
     logger.info(" API Documentation: http://localhost:8000/docs")
     logger.info(f" Services loaded: {len(available_services)}")
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+
+@app.get("/api/debug/imports")
+def debug_imports():
+    errors = {}
+    for service_name, module_path in service_imports.items():
+        try:
+            importlib.import_module(module_path)
+        except Exception as e:
+            pass
+    return {"imports": errors}
+
+# ================================
+# CHATS (replaces NOTEBOOKS)
+# ================================
+@app.post("/api/chats")
+async def create_chat(request: Request, body: ChatCreateRequest):
+    user_id = request.headers.get("X-User-ID", "user_123")
+    chat_id = generate_id("chat")
+    chat = {
+        "id": chat_id,
+        "user_id": user_id,
+        "title": body.title or "New Chat",
+        "document_ids": [],
+        "doc_summaries": {},
+        "created_at": get_utc_timestamp(),
+        "updated_at": get_utc_timestamp(),
+    }
+    chats_data[chat_id] = chat
+    save_db()
+    return chat
+
+@app.get("/api/chats")
+async def list_chats(request: Request):
+    user_id = request.headers.get("X-User-ID", "user_123")
+    user_chats = [c for c in chats_data.values() if c.get("user_id") == user_id]
+    user_chats.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+    for c in user_chats:
+        c["document_count"] = len([f for f in files_data.values()
+                                    if f.get("chat_id") == c["id"] or f.get("notebook_id") == c["id"]])
+    return {"chats": user_chats}
+
+@app.get("/api/chats/{chat_id}")
+async def get_chat(chat_id: str, request: Request):
+    if chat_id not in chats_data:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    chat = dict(chats_data[chat_id])
+    chat["document_count"] = len([f for f in files_data.values()
+                                    if f.get("chat_id") == chat_id or f.get("notebook_id") == chat_id])
+    return chat
+
+@app.patch("/api/chats/{chat_id}")
+async def update_chat(chat_id: str, request: Request):
+    if chat_id not in chats_data:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    body = await request.json()
+    if "title" in body:
+        chats_data[chat_id]["title"] = body["title"]
+    chats_data[chat_id]["updated_at"] = get_utc_timestamp()
+    save_db()
+    return chats_data[chat_id]
+
+@app.delete("/api/chats/{chat_id}")
+async def delete_chat(chat_id: str, request: Request):
+    if chat_id not in chats_data:
+        return {"success": True}
+
+    # Delete associated GCS files
+    files_to_delete = [f_id for f_id, f in files_data.items()
+                        if f.get("chat_id") == chat_id or f.get("notebook_id") == chat_id]
+
+    for f_id in files_to_delete:
+        fd = files_data[f_id]
+        gcs_path = fd.get("gcs_path", "")
+        if gcs_path.startswith("gs://"):
+            try:
+                creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+                if creds_path and os.path.exists(creds_path):
+                    from google.oauth2 import service_account as sa
+                    creds = sa.Credentials.from_service_account_file(creds_path)
+                    sc = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT, credentials=creds)
+                else:
+                    sc = storage.Client(project=settings.GOOGLE_CLOUD_PROJECT)
+                without = gcs_path[5:]
+                bucket_name, _, object_key = without.partition("/")
+                bucket = sc.bucket(bucket_name)
+                blob = bucket.blob(object_key)
+                if blob.exists(sc):
+                    blob.delete()
+                    logger.info(f" Deleted GCS object: {gcs_path}")
+            except Exception as e:
+                logger.warning(f" GCS delete failed for {gcs_path}: {e}")
+        del files_data[f_id]
+
+    del chats_data[chat_id]
+    save_db()
+    return {"success": True}
+
+@app.get("/api/chats/{chat_id}/status")
+async def get_chat_status(chat_id: str):
+    """Returns processing status for all files in this chat."""
+    chat_files = [f for f in files_data.values()
+                  if f.get("chat_id") == chat_id or f.get("notebook_id") == chat_id]
+    statuses = []
+    for f in chat_files:
+        statuses.append({
+            "file_id": f["file_id"],
+            "filename": f.get("original_filename", ""),
+            "processing_status": f.get("processing_status", "pending"),
+            "error": f.get("error"),
+            "doc_summary": f.get("doc_summary", ""),
+            "ai_title": f.get("ai_title", ""),
+        })
+    all_done = all(s["processing_status"] == "completed" for s in statuses) if statuses else False
+    any_failed = any(s["processing_status"] == "failed" for s in statuses)
+    return {
+        "chat_id": chat_id,
+        "files": statuses,
+        "all_processed": all_done,
+        "any_failed": any_failed,
+        "total": len(statuses)
+    }
+
+@app.get("/api/conversations/chat/{chat_id}")
+async def get_conversations_by_chat(chat_id: str, request: Request):
+    """Returns the conversation history for a chat (all messages from any doc in this chat)."""
+    chat_convs = [c for c in conversations_data.values() if c.get("chat_id") == chat_id]
+    if not chat_convs:
+        return {"conversation_id": None, "messages": []}
+    chat_convs.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    conv = chat_convs[0]
+    return {
+        "conversation_id": conv.get("conversation_id"),
+        "messages": conv.get("messages", [])
+    }
+
+# Keep legacy notebook endpoints for backward compat (redirect to chats_data)
+@app.post("/api/notebooks")
+async def create_notebook_legacy(request: Request):
+    body = await request.json()
+    user_id = request.headers.get("X-User-ID", "user_123")
+    chat_id = generate_id("chat")
+    chat = {
+        "id": chat_id,
+        "user_id": user_id,
+        "title": body.get("title", "New Chat"),
+        "document_ids": [],
+        "doc_summaries": {},
+        "created_at": get_utc_timestamp(),
+        "updated_at": get_utc_timestamp(),
+    }
+    chats_data[chat_id] = chat
+    save_db()
+    return chat
+
+@app.get("/api/notebooks")
+async def list_notebooks_legacy(request: Request):
+    user_id = request.headers.get("X-User-ID", "user_123")
+    user_chats = [c for c in chats_data.values() if c.get("user_id") == user_id]
+    user_chats.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+    for c in user_chats:
+        c["document_count"] = len([f for f in files_data.values()
+                                    if f.get("chat_id") == c["id"] or f.get("notebook_id") == c["id"]])
+    return {"notebooks": user_chats}
+
+@app.get("/api/notebooks/{notebook_id}")
+async def get_notebook_legacy(notebook_id: str, request: Request):
+    if notebook_id not in chats_data:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return chats_data[notebook_id]
+
+@app.delete("/api/notebooks/{notebook_id}")
+async def delete_notebook_legacy(notebook_id: str, request: Request):
+    return await delete_chat(notebook_id, request)

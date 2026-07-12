@@ -76,6 +76,7 @@ class User(Base):
     preferences = Column(JSON, default={})
     
     # Relationships
+    notebooks = relationship("Notebook", back_populates="user")
     documents = relationship("Document", back_populates="user")
     chat_sessions = relationship("ChatSession", back_populates="user")
     reports = relationship("Report", back_populates="user")
@@ -88,11 +89,31 @@ class User(Base):
     )
 
 
+class Notebook(Base):
+    """Notebook model for organizing multiple documents in an isolated workspace"""
+    __tablename__ = "notebooks"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String, nullable=False, default="Untitled Notebook")
+    description = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    user = relationship("User", back_populates="notebooks")
+    documents = relationship("Document", back_populates="notebook", cascade="all, delete-orphan")
+
+
 class Document(Base):
     """Enhanced document model with comprehensive metadata"""
     __tablename__ = "documents"
     
     id = Column(String, primary_key=True, default=generate_uuid)
+    
+    # Relationships
+    notebook_id = Column(String, ForeignKey("notebooks.id", ondelete="CASCADE"), nullable=True, index=True)
     
     # File information
     filename = Column(String, nullable=False)
@@ -173,7 +194,8 @@ class Document(Base):
     
     # Relationships
     user = relationship("User", back_populates="documents")
-    chat_sessions = relationship("ChatSession", back_populates="document")
+    notebook = relationship("Notebook", back_populates="documents")
+    chat_sessions = relationship("ChatSession", back_populates="document", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="document")
     voice_summaries = relationship("VoiceSummary", back_populates="document")
     processing_logs = relationship("DocumentProcessingLog", back_populates="document")

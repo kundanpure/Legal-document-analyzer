@@ -364,12 +364,8 @@ class StorageManager:
             content_type='application/pdf'
         )
         
-        # Generate signed URL for download (valid for 1 hour)
-        download_url = await asyncio.to_thread(
-            blob.generate_signed_url,
-            expiration=datetime.now(timezone.utc) + timedelta(hours=1),
-            method='GET'
-        )
+        # Return a GCS URL (the backend proxy will download it using default credentials)
+        download_url = f"https://storage.googleapis.com/{self.bucket.name}/{blob_name}"
         
         self.logger.info(f"PDF report saved to GCS: {report_id}")
         return download_url
@@ -882,12 +878,8 @@ class StorageManager:
         """
         
         if self.use_gcs:
-            blob = self.bucket.blob(blob_name)
-            
-            return blob.generate_signed_url(
-                expiration=datetime.now(timezone.utc) + timedelta(hours=expiration_hours),
-                method=method
-            )
+            # We can't generate signed URLs with Cloud Run default credentials
+            return f"https://storage.googleapis.com/{self.bucket.name}/{blob_name}"
         else:
             # For local storage, return file path with expiration note
             file_path = self.local_storage_path / blob_name

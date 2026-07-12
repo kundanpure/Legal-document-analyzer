@@ -3,7 +3,7 @@ Enhanced database model utilities and helpers for LegalMind AI
 Provides database model validation, serialization, and utility functions
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional, List, Union
 from enum import Enum
 
@@ -13,7 +13,7 @@ from sqlalchemy.sql import func
 
 from app.core.database import (
     Document, User, ChatSession, ChatMessage, Report, 
-    VoiceSummary, DocumentProcessingLog, SystemMetric, AuditLog
+    VoiceSummary, DocumentProcessingLog, SystemMetric, AuditLog, Notebook
 )
 from config.logging import get_logger
 
@@ -33,6 +33,19 @@ class DatabaseOperationResult(BaseModel):
 class ModelSerializer:
     """Utility class for serializing database models to dictionaries"""
     
+    @staticmethod
+    def serialize_notebook(notebook: Notebook) -> Dict[str, Any]:
+        """Serialize Notebook model to dictionary"""
+        return {
+            'id': notebook.id,
+            'user_id': notebook.user_id,
+            'title': notebook.title,
+            'description': notebook.description,
+            'created_at': notebook.created_at.isoformat() if notebook.created_at else None,
+            'updated_at': notebook.updated_at.isoformat() if notebook.updated_at else None,
+            'document_count': len(notebook.documents) if hasattr(notebook, 'documents') else 0
+        }
+
     @staticmethod
     def serialize_document(document: Document) -> Dict[str, Any]:
         """Serialize Document model to dictionary"""
@@ -66,7 +79,8 @@ class ModelSerializer:
             'fairness_score': document.fairness_score,
             'language': document.language,
             'tags': document.tags,
-            'user_id': document.user_id
+            'user_id': document.user_id,
+            'notebook_id': document.notebook_id
         }
     
     @staticmethod
@@ -178,8 +192,17 @@ class DatabaseQueryHelper:
         
         if status:
             query = query.filter(Document.status == status)
-        
+            
         return query.order_by(Document.upload_date.desc()).offset(offset).limit(limit).all()
+        
+    def get_user_notebooks(self, user_id: str, limit: int = 50, offset: int = 0) -> List[Notebook]:
+        """Get notebooks for a user"""
+        return self.session.query(Notebook)\
+            .filter(Notebook.user_id == user_id)\
+            .order_by(Notebook.updated_at.desc())\
+            .offset(offset)\
+            .limit(limit)\
+            .all()
     
     def get_document_with_relations(self, document_id: str, user_id: str) -> Optional[Document]:
         """Get document with related data"""
