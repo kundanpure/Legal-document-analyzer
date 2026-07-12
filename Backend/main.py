@@ -441,9 +441,17 @@ async def process_file_job(file_id: str, job_id: str):
         logger.info(f" [JOB DONE] file_id={file_id} job_id={job_id}")
 
         # 5) Auto-generate document summary and chat title via Gemini
+        filename = files_data[file_id].get("original_filename", "document")
+        doc_summary = "Summary generation unavailable."
+        chat_title = filename
+
+        # Pre-set fallbacks so the frontend doesn't hang if AI fails or is skipped
+        files_data[file_id]["analysis"]["summary"] = doc_summary
+        files_data[file_id]["doc_summary"] = doc_summary
+        files_data[file_id]["ai_title"] = chat_title
+
         try:
             text_sample = extraction.get("full_text", "")[:4000]
-            filename = files_data[file_id].get("original_filename", "document")
             api_key = os.getenv("GOOGLE_API_KEY", "")
             if api_key and text_sample.strip():
                 import google.generativeai as genai
@@ -456,42 +464,87 @@ async def process_file_job(file_id: str, job_id: str):
                     f"Document filename: {filename}\n"
                     f"Document text excerpt:\n{text_sample}\n\n"
                     f"Respond in this exact JSON format:\n"
-                    f'{{\"title\": \"...\", \"summary\": \"...\"}}'
+                    f'{{"title": "...", "summary": "..."}}'
                 )
                 resp = await asyncio.to_thread(lambda: model.generate_content(prompt))
                 resp_text = resp.text.strip()
                 # Parse JSON
                 import re
-                json_match = re.search(r'\{[^{}]+\}', resp_text, re.DOTALL)
+                
+                # Better regex to capture JSON even with nested braces
+                json_match = re.search(r'\{.*\}', resp_text, re.DOTALL)
                 if json_match:
-                    ai_result = json.loads(json_match.group())
-                    doc_summary = ai_result.get("summary", "")
-                    chat_title = ai_result.get("title", filename)
-                    files_data[file_id]["analysis"]["summary"] = doc_summary
-                    files_data[file_id]["doc_summary"] = doc_summary
-                    files_data[file_id]["ai_title"] = chat_title
-                    # Update the parent chat's title and summary
-                    chat_id = files_data[file_id].get("chat_id")
-                    if chat_id and chat_id in chats_data:
-                        chat = chats_data[chat_id]
-                        # Only set title if it's still the default
-                        if not chat.get("title") or chat["title"] == "New Chat":
-                            chat["title"] = chat_title
-                        # Always append/update the doc summary in chat
-                        if "doc_summaries" not in chat:
-                            chat["doc_summaries"] = {}
-                        chat["doc_summaries"][file_id] = {
-                            "filename": filename,
-                            "summary": doc_summary,
-                            "title": chat_title,
-                        }
-                        chat["updated_at"] = get_utc_timestamp()
-                    logger.info(f" [AI] Auto-title='{chat_title}', summary generated ({len(doc_summary)} chars)")
-                    
-                    # Persist the changes immediately
-                    save_db()
+                    try:
+                        ai_result = json.loads(json_match.group())
+                        doc_summary = ai_result.get("summary", "Summary generated, but empty.")
+                        chat_title = ai_result.get("title", filename)
+                        
+                        files_data[file_id]["analysis"]["summary"] = doc_summary
+                        files_data[file_id]["doc_summary"] = doc_summary
+                        files_data[file_id]["ai_title"] = chat_title
+                        
+                    except json.JSONDecodeError as e:
+                        logger.warning(f" [AI] JSON Decode failed: {e}, Response: {resp_text}")
+                        # Fallback parsing if JSON fails but response exists
+                        files_data[file_id]["doc_summary"] = f"Generated summary: {resp_text[:200]}..."
+
+                # Update the parent chat's title and summary
+                chat_id = files_data[file_id].get("chat_id")
+                if chat_id and chat_id in chats_data:
+                    chat = chats_data[chat_id]
+                    # Only set title if it's still the default
+                    if not chat.get("title") or chat["title"] == "New Chat":
+                        chat["title"] = chat_title
+                    # Always append/update the doc summary in chat
+                    if "doc_summaries" not in chat:
+                        chat["doc_summaries"] = {}
+                    chat["doc_summaries"][file_id] = {
+                        "filename": filename,
+                        "summary": doc_summary,
+                        "title": chat_title,
+                    }
+                    chat["updated_at"] = get_utc_timestamp()
+                logger.info(f" [AI] Auto-title='{chat_title}', summary generated ({len(doc_summary)} chars)")
+                
+                # Persist the changes immediately
+                save_db()
+            else:
+                if not api_key:
+                    logger.warning(" [AI] Skipped summary generation because GOOGLE_API_KEY is not set.")
+                if not text_sample.strip():
+                    logger.warning(" [AI] Skipped summary generation because document text is empty.")
+                # We still need to update chat if skipped, so frontend doesn't hang
+                chat_id = files_data[file_id].get("chat_id")
+                if chat_id and chat_id in chats_data:
+                    chat = chats_data[chat_id]
+                    if not chat.get("title") or chat["title"] == "New Chat":
+                        chat["title"] = chat_title
+                    if "doc_summaries" not in chat:
+                        chat["doc_summaries"] = {}
+                    chat["doc_summaries"][file_id] = {
+                        "filename": filename,
+                        "summary": doc_summary,
+                        "title": chat_title,
+                    }
+                    chat["updated_at"] = get_utc_timestamp()
+                save_db()
         except Exception as e:
             logger.warning(f" [AI] Auto-title/summary generation failed (non-fatal): {e}")
+            # Even if it fails, we should update the chat so it doesn't hang
+            chat_id = files_data[file_id].get("chat_id")
+            if chat_id and chat_id in chats_data:
+                chat = chats_data[chat_id]
+                if not chat.get("title") or chat["title"] == "New Chat":
+                    chat["title"] = chat_title
+                if "doc_summaries" not in chat:
+                    chat["doc_summaries"] = {}
+                chat["doc_summaries"][file_id] = {
+                    "filename": filename,
+                    "summary": doc_summary,
+                    "title": chat_title,
+                }
+                chat["updated_at"] = get_utc_timestamp()
+            save_db()
 
         save_db()
 
