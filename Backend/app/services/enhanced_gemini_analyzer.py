@@ -83,7 +83,7 @@ class EnhancedGeminiAnalyzer:
                 genai.configure(api_key=settings.GOOGLE_API_KEY)
                 
                 # Get model settings with fallbacks
-                model_name = getattr(settings, 'GEMINI_MODEL', 'gemini-1.5-flash')
+                model_name = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
                 temperature = getattr(settings, 'GEMINI_TEMPERATURE', 0.7)
                 max_tokens = getattr(settings, 'GEMINI_MAX_TOKENS', 8192)
                 

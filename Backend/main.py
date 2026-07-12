@@ -456,7 +456,7 @@ async def process_file_job(file_id: str, job_id: str):
             if api_key and text_sample.strip():
                 import google.generativeai as genai
                 genai.configure(api_key=api_key)
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                model = genai.GenerativeModel("gemini-3.5-flash")
                 prompt = (
                     f"You are a legal document assistant. Analyze this document excerpt and provide:\n"
                     f"1. A SHORT TITLE (5-8 words max) for a chat session about this document\n"
